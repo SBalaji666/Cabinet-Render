@@ -326,8 +326,8 @@ export default function App() {
             Cabinet Designer 3D
           </h1>
           <div style={{ fontSize: 10, color: ui.muted, marginTop: 3 }}>
-            {stats.totalParts} parts · {stats.totalSheets} sheets · £
-            {Math.round(stats.materialCost + stats.hardwareCost)} total ·{" "}
+            {stats.totalParts} parts · {stats.totalSheets} sheets ·{" "}
+            {/* {Math.round(stats.materialCost + stats.hardwareCost)} total ·{" "} */}
             {stats.avgEfficiency}% sheet efficiency
           </div>
         </div>
@@ -381,7 +381,7 @@ export default function App() {
             </svg>,
             stats.totalSheets,
           )}
-          {tabBtn(
+          {/*{tabBtn(
             "Hardware",
             "hardware",
             <svg
@@ -396,7 +396,7 @@ export default function App() {
               <path d="M12 1v6m0 6v6M1 12h6m6 0h6" />
             </svg>,
             hardwareSchedule.length,
-          )}
+          )} 
           {tabBtn(
             "Machining",
             "machining",
@@ -411,7 +411,7 @@ export default function App() {
               <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
             </svg>,
             machiningSchedule.length,
-          )}
+          )}*/}
         </div>
       </div>
 

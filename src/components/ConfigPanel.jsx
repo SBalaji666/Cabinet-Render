@@ -139,7 +139,7 @@ export default function ConfigPanel({
       </div>
 
       {/* Tolerances */}
-      <div style={sectionStyle}>
+      {/* <div style={sectionStyle}>
         <div style={headerStyle}>TOLERANCES (mm)</div>
         <div
           style={{
@@ -172,49 +172,49 @@ export default function ConfigPanel({
             </label>
           ))}
         </div>
-      </div>
+      </div> */}
 
       {/* Hardware */}
       <div style={sectionStyle}>
         <div style={headerStyle}>HARDWARE</div>
         {[
-          [
-            "Joinery",
-            "joinery",
-            Object.keys(JOINERY_TYPES).map((k) => ({
-              v: k.toLowerCase(),
-              l: JOINERY_TYPES[k].name,
-            })),
-          ],
-          [
-            "Door Overlay",
-            "doorOverlay",
-            Object.keys(DOOR_OVERLAY_TYPES).map((k) => ({
-              v: k,
-              l: DOOR_OVERLAY_TYPES[k].name,
-            })),
-          ],
-          [
-            "Hinge",
-            "hinge",
-            Object.keys(HINGES).map((k) => ({ v: k, l: HINGES[k].model })),
-          ],
-          [
-            "Drawer Slide",
-            "drawerSlide",
-            Object.keys(DRAWER_SLIDES).map((k) => ({
-              v: k,
-              l: `${DRAWER_SLIDES[k].brand} ${DRAWER_SLIDES[k].model}`,
-            })),
-          ],
-          [
-            "Shelf System",
-            "shelfSystem",
-            Object.keys(SHELF_SYSTEMS).map((k) => ({
-              v: k,
-              l: SHELF_SYSTEMS[k].name,
-            })),
-          ],
+          // [
+          //   "Joinery",
+          //   "joinery",
+          //   Object.keys(JOINERY_TYPES).map((k) => ({
+          //     v: k.toLowerCase(),
+          //     l: JOINERY_TYPES[k].name,
+          //   })),
+          // ],
+          // [
+          //   "Door Overlay",
+          //   "doorOverlay",
+          //   Object.keys(DOOR_OVERLAY_TYPES).map((k) => ({
+          //     v: k,
+          //     l: DOOR_OVERLAY_TYPES[k].name,
+          //   })),
+          // ],
+          // [
+          //   "Hinge",
+          //   "hinge",
+          //   Object.keys(HINGES).map((k) => ({ v: k, l: HINGES[k].model })),
+          // ],
+          // [
+          //   "Drawer Slide",
+          //   "drawerSlide",
+          //   Object.keys(DRAWER_SLIDES).map((k) => ({
+          //     v: k,
+          //     l: `${DRAWER_SLIDES[k].brand} ${DRAWER_SLIDES[k].model}`,
+          //   })),
+          // ],
+          // [
+          //   "Shelf System",
+          //   "shelfSystem",
+          //   Object.keys(SHELF_SYSTEMS).map((k) => ({
+          //     v: k,
+          //     l: SHELF_SYSTEMS[k].name,
+          //   })),
+          // ],
           [
             "Plinth",
             "plinth",

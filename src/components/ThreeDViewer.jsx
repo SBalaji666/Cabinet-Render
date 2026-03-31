@@ -62,24 +62,24 @@ export default function ThreeDViewer({ config, onSectionSelect, ui }) {
     const { length: L, height: H, depth: D } = config.overall;
     const camera = rendererRef.current.camera;
     const controls = rendererRef.current.controls;
+    const maxDim = Math.max(L, H, D);
+    const distance = maxDim * 1.8;
 
     switch (mode) {
       case "front":
-        camera.position.set(0, H / 2, L * 1.5);
+        camera.position.set(0, config.overall.height / 2, maxDim * 1.5);
         controls.target.set(0, H / 2, 0);
         break;
       case "side":
-        camera.position.set(L * 1.5, H / 2, 0);
+        camera.position.set(maxDim * 1.5, config.overall.height / 2, 0);
         controls.target.set(0, H / 2, 0);
         break;
       case "top":
-        camera.position.set(0, Math.max(L, D) * 1.5, 0);
+        camera.position.set(0, maxDim * 2, 0);
         controls.target.set(0, 0, 0);
         break;
       case "perspective":
       default:
-        const maxDim = Math.max(L, H, D);
-        const distance = maxDim * 1.8;
         camera.position.set(-distance * 0.4, H * 0.8, distance * 0.8);
         controls.target.set(0, H / 2, 0);
         break;
