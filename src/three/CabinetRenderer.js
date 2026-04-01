@@ -88,25 +88,40 @@ export class CabinetRenderer {
   printView() {
     this.renderer.render(this.scene, this.camera);
     const dataUrl = this.renderer.domElement.toDataURL("image/png");
+    if (!dataUrl || dataUrl === "data:,") {
+      console.error(
+        "Failed to capture canvas. Is preserveDrawingBuffer set to true?",
+      );
+      return;
+    }
     const printWindow = window.open("", "_blank");
     printWindow.document.write(`
-      <html>
-        <head>
-          <title>Cabinet Shop Drawing</title>
-          <style>
-            body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background: #fff; }
-            img { max-width: 100%; max-height: 100vh; object-fit: contain; }
-            @media print {
-              @page { margin: 0; size: landscape; }
-              body { margin: 0; }
-            }
-          </style>
-        </head>
-        <body>
-          <img src="${dataUrl}" onload="window.print(); window.close();" />
-        </body>
-      </html>
-    `);
+    <html>
+      <head>
+        <title>Cabinet Shop Drawing</title>
+        <style>
+          body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+          img { width: 100%; height: auto; display: block; }
+          @media print {
+            @page { size: landscape; margin: 0; }
+            body { margin: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <img id="print-image" src="${dataUrl}" />
+        <script>
+          const img = document.getElementById('print-image');
+          img.onload = () => {
+            setTimeout(() => {
+              window.print();
+              window.close();
+            }, 250);
+          };
+        </script>
+      </body>
+    </html>
+  `);
     printWindow.document.close();
   }
 
