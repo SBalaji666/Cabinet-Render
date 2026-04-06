@@ -19,36 +19,45 @@ import HardwareSchedule from "./components/HardwareSchedule.jsx";
 import MachiningSchedule from "./components/MachiningSchedule.jsx";
 import ConfigPanel from "./components/ConfigPanel.jsx";
 
+import { useDesignStore } from "./stores/useDesignStore";
+import { useUIStore } from "./stores/useUIStore";
+import { useSaveDesign } from "./hooks/useServerSync";
+import { useAuthStore } from "./stores/useAuthStore";
+
 const FONT = "'IBM Plex Mono', 'Courier New', monospace";
 
 export default function App() {
-  // Section ID counter — useRef so it survives hot reloads without stale closures
-  const nextSectionId = useRef(8);
+  const {
+    overall,
+    setOverall,
+    materials,
+    setMaterials,
+    tolerances,
+    setTolerances,
+    hardware,
+    setHardware,
+    sections,
+    addSection,
+    removeSection,
+    updateSection,
+    generateEquidistantSections,
+    getConfig,
+  } = useDesignStore();
 
-  // ── State ─────────────────────────────────────────────────────────────────
-  const [overall, setOverall] = useState(DEFAULTS.overall);
-  const [materials, setMaterials] = useState(DEFAULTS.materials);
-  const [tolerances, setTolerances] = useState(DEFAULTS.tolerances);
-  const [hardware, setHardware] = useState({
-    joinery: DEFAULTS.joinery,
-    drawerSlide: DEFAULTS.drawerSlide,
-    hinge: DEFAULTS.hinge,
-    shelfSystem: DEFAULTS.shelfSystem,
-    plinth: DEFAULTS.plinth,
-    construction: DEFAULTS.construction,
-    doorOverlay: DEFAULTS.doorOverlay,
-    edgeBanding: DEFAULTS.edgeBanding,
-  });
+  const {
+    themeKey,
+    setThemeKey,
+    mainTab,
+    setMainTab,
+    selectedSection,
+    setSelectedSection,
+    clearSelectedSection,
+    ui,
+  } = useUIStore();
 
-  // FIXED: Duplicate 'S7' label corrected — last section is now 'S8'
-  const [sections, setSections] = useState([]);
-
-  const [themeKey, setThemeKey] = useState("technical");
-  const [mainTab, setMainTab] = useState("3d-view");
-  const [selectedSection, setSelectedSection] = useState(null);
-
-  const theme = THEMES[themeKey];
-  const ui = theme.ui;
+  const { mutate: saveDesign, isPending: isSaving } = useSaveDesign();
+  const [currentDesignId, setCurrentDesignId] = useState(null); // null = unsaved
+  const [designName, setDesignName] = useState("Untitled Design");
 
   // ── Config object ──────────────────────────────────────────────────────────
   const config = useMemo(
@@ -168,63 +177,6 @@ export default function App() {
     a.click();
   };
 
-  // ── Section management ────────────────────────────────────────────────────
-  const addSection = () => {
-    const newId = nextSectionId.current++; // Keep internal ID unique for React keys
-
-    setSections((prev) => {
-      // Find the highest number currently used in labels (e.g., "S3" -> 3)
-      const highestLabelNum = prev.reduce((max, s) => {
-        // Strip out any non-numeric characters just in case the user renamed it
-        const num = parseInt(s.label.replace(/\D/g, ""), 10);
-        return !isNaN(num) && num > max ? num : max;
-      }, 0);
-
-      return [
-        ...prev,
-        {
-          id: newId,
-          label: `S${highestLabelNum + 1}`, // Clean visual label!
-          width: 350,
-          type: "closed",
-          shelves: 2,
-          drawers: { count: 0, height: 120, placement: "bottom" },
-        },
-      ];
-    });
-  };
-
-  const removeSection = (id) =>
-    setSections((prev) => prev.filter((s) => s.id !== id));
-  const updateSection = (updated) =>
-    setSections((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-
-  // ── Auto-generate sections ────────────────────────────────────────────────
-  const generateEquidistantSections = (count) => {
-    if (count < 1) return;
-
-    const newSections = [];
-    const equalWidth = Math.floor(overall.length / count);
-
-    for (let i = 0; i < count; i++) {
-      const isLast = i === count - 1;
-      const sectionWidth = isLast
-        ? overall.length - equalWidth * i
-        : equalWidth;
-
-      newSections.push({
-        id: nextSectionId.current++, // Keeps React keys strictly unique
-        label: `S${i + 1}`, // Restarts labels cleanly at S1, S2, S3...
-        width: sectionWidth,
-        type: "closed",
-        shelves: 2,
-        drawers: { count: 0, height: 120, placement: "bottom" },
-      });
-    }
-
-    setSections(newSections);
-  };
-
   // ── Tab button ────────────────────────────────────────────────────────────
   const tabBtn = (label, key, icon, badge = null) => (
     <button
@@ -333,6 +285,55 @@ export default function App() {
         </div>
 
         <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+          {/* Design name — inline editable */}
+          <input
+            value={designName}
+            onChange={(e) => setDesignName(e.target.value)}
+            style={{
+              padding: "7px 10px",
+              borderRadius: 8,
+              border: `1.5px solid ${ui.border}`,
+              background: ui.inputBg,
+              color: ui.text,
+              fontFamily: FONT,
+              fontSize: 11,
+              fontWeight: 600,
+              width: 160,
+            }}
+            placeholder="Design name…"
+          />
+
+          {/* Save button */}
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              saveDesign(
+                { id: currentDesignId, name: designName },
+                { onSuccess: (design) => setCurrentDesignId(design._id) },
+              );
+            }}
+            disabled={isSaving}
+            style={{
+              padding: "9px 16px",
+              borderRadius: 8,
+              fontFamily: FONT,
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: isSaving ? "not-allowed" : "pointer",
+              border: `2px solid ${ui.accent}`,
+              background: isSaving ? ui.border : ui.accent,
+              color: "#fff",
+              opacity: isSaving ? 0.7 : 1,
+              transition: "all 0.15s",
+            }}
+          >
+            {isSaving
+              ? "Saving…"
+              : currentDesignId
+                ? "💾 Save"
+                : "💾 Save Design"}
+          </button>
+
           {tabBtn(
             "3D View",
             "3d-view",
