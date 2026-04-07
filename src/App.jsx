@@ -1,3 +1,11 @@
+// src/App.jsx
+// Updated to support:
+//   - Save/update via SaveDesignModal (from Next.js project)
+//   - Delete with confirmation
+//   - "Load saved…" dropdown (navigates to /designer/:id)
+//   - Preloaded config from route pages (DesignerPage / DesignerWithDesign)
+//   - All existing 3D view, cut list, nesting tabs unchanged
+
 import React, { useState, useMemo, useRef } from "react";
 import { THEMES } from "./data/themes.js";
 import { DEFAULTS } from "./data/constants.js";
@@ -19,65 +27,82 @@ import HardwareSchedule from "./components/HardwareSchedule.jsx";
 import MachiningSchedule from "./components/MachiningSchedule.jsx";
 import ConfigPanel from "./components/ConfigPanel.jsx";
 
-import { useDesignStore } from "./stores/useDesignStore";
-import { useUIStore } from "./stores/useUIStore";
-import { useSaveDesign } from "./hooks/useServerSync";
-import { useAuthStore } from "./stores/useAuthStore";
+// ── New components (ported from Next.js project) ──────────────────────────────
+import SaveDesignModal from "./components/SaveDesignModal.jsx";
+import LoadDesignDropdown from "./components/LoadDesignDropdown.jsx";
+import { useDesignSync } from "./hooks/useDesignSync.js";
+import { useNavigate } from "react-router-dom";
 
 const FONT = "'IBM Plex Mono', 'Courier New', monospace";
 
-export default function App() {
-  const {
-    overall,
-    setOverall,
-    materials,
-    setMaterials,
-    tolerances,
-    setTolerances,
-    hardware,
-    setHardware,
-    sections,
-    addSection,
-    removeSection,
-    updateSection,
-    generateEquidistantSections,
-    getConfig,
-  } = useDesignStore();
+// ── Props ─────────────────────────────────────────────────────────────────────
+// savedDesigns        — array of { _id, name, updatedAt } from the API
+// preloadedConfig     — config object when opening a saved design (null for new)
+// preloadedDesignId   — MongoDB _id when opening a saved design (null for new)
+// preloadedDesignName — display name when opening a saved design
 
-  const {
-    themeKey,
-    setThemeKey,
-    mainTab,
-    setMainTab,
-    selectedSection,
-    setSelectedSection,
-    clearSelectedSection,
-    ui,
-  } = useUIStore();
+export default function App({
+  savedDesigns = [],
+  preloadedConfig = null,
+  preloadedDesignId = null,
+  preloadedDesignName = "Untitled design",
+  preloadedDesignDescription = "",
+}) {
+  const navigate = useNavigate();
+  const nextSectionId = useRef(8);
 
-  const { mutate: saveDesign, isPending: isSaving } = useSaveDesign();
-  const [currentDesignId, setCurrentDesignId] = useState(null); // null = unsaved
-  const [designName, setDesignName] = useState("Untitled Design");
+  // ── Design sync hook ──────────────────────────────────────────────────────
+  const { saveDesign, deleteDesign, isPending, saveError, setSaveError } =
+    useDesignSync();
 
-  // ── Config object ──────────────────────────────────────────────────────────
+  // ── State — initialised from preloadedConfig if opening a saved design ────
+  const [overall, setOverall] = useState(
+    preloadedConfig?.overall ?? DEFAULTS.overall,
+  );
+  const [materials, setMaterials] = useState(
+    preloadedConfig?.materials ?? DEFAULTS.materials,
+  );
+  const [tolerances, setTolerances] = useState(
+    preloadedConfig?.tolerances ?? DEFAULTS.tolerances,
+  );
+  const [hardware, setHardware] = useState(
+    preloadedConfig?.hardware ?? {
+      joinery: DEFAULTS.joinery,
+      drawerSlide: DEFAULTS.drawerSlide,
+      hinge: DEFAULTS.hinge,
+      shelfSystem: DEFAULTS.shelfSystem,
+      plinth: DEFAULTS.plinth,
+      construction: DEFAULTS.construction,
+      doorOverlay: DEFAULTS.doorOverlay,
+      edgeBanding: DEFAULTS.edgeBanding,
+    },
+  );
+  const [sections, setSections] = useState(preloadedConfig?.sections ?? []);
+  const [themeKey, setThemeKey] = useState(
+    preloadedConfig?.themeKey ?? "technical",
+  );
+  const [mainTab, setMainTab] = useState("3d-view");
+  const [selectedSection, setSelectedSection] = useState(null);
+
+  // ── Save modal state ──────────────────────────────────────────────────────
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [currentDesignId, setCurrentDesignId] = useState(preloadedDesignId);
+  const [designName, setDesignName] = useState(preloadedDesignName);
+  const [designDescription, setDesignDescription] = useState(
+    preloadedDesignDescription,
+  );
+
+  const theme = THEMES[themeKey] ?? THEMES.technical;
+  const ui = theme.ui;
+
+  // ── Config + computed outputs ─────────────────────────────────────────────
   const config = useMemo(
-    () => ({
-      overall,
-      materials,
-      tolerances,
-      sections,
-      hardware,
-    }),
+    () => ({ overall, materials, tolerances, sections, hardware }),
     [overall, materials, tolerances, sections, hardware],
   );
 
-  // ── Validation warnings ───────────────────────────────────────────────────
   const warnings = useMemo(() => validateConfig(config), [config]);
-
-  // ── Generate all outputs ──────────────────────────────────────────────────
   const cutList = useMemo(() => generateCutList(config), [config]);
-
-  // Update this block to pass cutList to the function
   const hardwareSchedule = useMemo(
     () => generateHardwareSchedule(config, cutList),
     [config, cutList],
@@ -95,7 +120,6 @@ export default function App() {
     [sheetLayout],
   );
 
-  // ── Stats ─────────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
     const sheetValues = Object.values(sheetLayout);
     const avgEff =
@@ -114,6 +138,32 @@ export default function App() {
   }, [cutList, sheetLayout, materialCost, hardwareSchedule]);
 
   const totalMm = sections.reduce((a, s) => a + s.width, 0);
+
+  // ── Save handler ──────────────────────────────────────────────────────────
+  const handleSave = async (name, description) => {
+    const result = await saveDesign({
+      designId: currentDesignId,
+      name,
+      description,
+      overall,
+      materials,
+      tolerances,
+      hardware,
+      sections,
+      themeKey,
+    });
+
+    if (result.success) {
+      setDesignName(name);
+      setDesignDescription(description);
+      if (!currentDesignId) setCurrentDesignId(result.designId);
+      setSaveModalOpen(false);
+    }
+    // saveError is set automatically in the hook on failure
+  };
+
+  // ── Delete handler ────────────────────────────────────────────────────────
+  const handleDelete = () => deleteDesign(currentDesignId);
 
   // ── Export CSV ────────────────────────────────────────────────────────────
   const downloadCSV = (filter, searchTerm) => {
@@ -166,7 +216,6 @@ export default function App() {
     a.click();
   };
 
-  // ── Export nesting SVG ────────────────────────────────────────────────────
   const downloadNestingSVG = (material) => {
     const svg = generateNestingSVG(sheetLayout, material);
     if (!svg) return;
@@ -175,6 +224,47 @@ export default function App() {
     a.href = URL.createObjectURL(blob);
     a.download = `nesting_${material.replace(/\s+/g, "_")}.svg`;
     a.click();
+  };
+
+  // ── Section management ────────────────────────────────────────────────────
+  const addSection = () => {
+    const newId = nextSectionId.current++;
+    setSections((prev) => {
+      const highestLabelNum = prev.reduce((max, s) => {
+        const n = parseInt(s.label.replace(/\D/g, ""), 10);
+        return !isNaN(n) && n > max ? n : max;
+      }, 0);
+      return [
+        ...prev,
+        {
+          id: newId,
+          label: `S${highestLabelNum + 1}`,
+          width: 350,
+          type: "closed",
+          shelves: 2,
+          drawers: { count: 0, height: 120, placement: "bottom" },
+        },
+      ];
+    });
+  };
+
+  const removeSection = (id) =>
+    setSections((prev) => prev.filter((s) => s.id !== id));
+  const updateSection = (updated) =>
+    setSections((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+
+  const generateEquidistantSections = (count) => {
+    if (count < 1) return;
+    const equalWidth = Math.floor(overall.length / count);
+    const newSections = Array.from({ length: count }, (_, i) => ({
+      id: nextSectionId.current++,
+      label: `S${i + 1}`,
+      width: i === count - 1 ? overall.length - equalWidth * i : equalWidth,
+      type: "closed",
+      shelves: 2,
+      drawers: { count: 0, height: 120, placement: "bottom" },
+    }));
+    setSections(newSections);
   };
 
   // ── Tab button ────────────────────────────────────────────────────────────
@@ -248,7 +338,7 @@ export default function App() {
         rel="stylesheet"
       />
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div
         style={{
           maxWidth: 1400,
@@ -279,62 +369,117 @@ export default function App() {
           </h1>
           <div style={{ fontSize: 10, color: ui.muted, marginTop: 3 }}>
             {stats.totalParts} parts · {stats.totalSheets} sheets ·{" "}
-            {/* {Math.round(stats.materialCost + stats.hardwareCost)} total ·{" "} */}
             {stats.avgEfficiency}% sheet efficiency
+            {currentDesignId && (
+              <span style={{ marginLeft: 12, color: ui.accent }}>
+                ● {designName}
+              </span>
+            )}
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-          {/* Design name — inline editable */}
-          <input
-            value={designName}
-            onChange={(e) => setDesignName(e.target.value)}
-            style={{
-              padding: "7px 10px",
-              borderRadius: 8,
-              border: `1.5px solid ${ui.border}`,
-              background: ui.inputBg,
-              color: ui.text,
-              fontFamily: FONT,
-              fontSize: 11,
-              fontWeight: 600,
-              width: 160,
-            }}
-            placeholder="Design name…"
-          />
+        {/* ── Header actions ── */}
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          {currentDesignId && (
+            <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+              {/* Design name — inline editable */}
+              <input
+                value={designName}
+                onChange={(e) => setDesignName(e.target.value)}
+                style={{
+                  padding: "7px 10px",
+                  borderRadius: 8,
+                  border: `1.5px solid ${ui.border}`,
+                  background: ui.inputBg,
+                  color: ui.text,
+                  fontFamily: FONT,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  width: 160,
+                }}
+                placeholder="Design name…"
+              />
+            </div>
+          )}
 
-          {/* Save button */}
+          {/* Save / Update button */}
           <button
-            onClick={(e) => {
-              e.preventDefault();
-              saveDesign(
-                { id: currentDesignId, name: designName },
-                { onSuccess: (design) => setCurrentDesignId(design._id) },
-              );
-            }}
-            disabled={isSaving}
+            onClick={() => setSaveModalOpen(true)}
+            disabled={isPending}
             style={{
-              padding: "9px 16px",
+              padding: "8px 18px",
               borderRadius: 8,
               fontFamily: FONT,
               fontSize: 11,
               fontWeight: 600,
-              cursor: isSaving ? "not-allowed" : "pointer",
-              border: `2px solid ${ui.accent}`,
-              background: isSaving ? ui.border : ui.accent,
+              cursor: isPending ? "wait" : "pointer",
+              background: ui.accent,
               color: "#fff",
-              opacity: isSaving ? 0.7 : 1,
-              transition: "all 0.15s",
+              border: "none",
+              opacity: isPending ? 0.7 : 1,
+              transition: "opacity 0.15s",
             }}
           >
-            {isSaving
-              ? "Saving…"
-              : currentDesignId
-                ? "💾 Save"
-                : "💾 Save Design"}
+            {isPending ? "Saving…" : currentDesignId ? "💾 Update" : "💾 Save"}
           </button>
 
-          {tabBtn(
+          {/* Delete button — only shown when a design is loaded */}
+          {currentDesignId && (
+            <button
+              onClick={handleDelete}
+              disabled={isPending}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 8,
+                fontFamily: FONT,
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: "pointer",
+                background: "transparent",
+                color: "#ef4444",
+                border: "1.5px solid #ef4444",
+              }}
+            >
+              Delete
+            </button>
+          )}
+
+          {/* Back button — only shown when a design is loaded */}
+          {currentDesignId && (
+            <button
+              onClick={() => {
+                navigate("/designer");
+              }}
+              disabled={isPending}
+              style={{
+                padding: "8px 16px",
+                borderRadius: 8,
+                fontFamily: FONT,
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: "pointer",
+                background: "transparent",
+                color: "#7e6b6b",
+                border: "1.5px solid #7e6b6b",
+              }}
+            >
+              Back
+            </button>
+          )}
+
+          {!currentDesignId && (
+            <LoadDesignDropdown designs={savedDesigns} ui={ui} />
+          )}
+
+          {/* Tab buttons */}
+          {/* {tabBtn(
             "3D View",
             "3d-view",
             <svg
@@ -381,42 +526,11 @@ export default function App() {
               <rect x="3" y="14" width="7" height="7" />
             </svg>,
             stats.totalSheets,
-          )}
-          {/*{tabBtn(
-            "Hardware",
-            "hardware",
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 1v6m0 6v6M1 12h6m6 0h6" />
-            </svg>,
-            hardwareSchedule.length,
-          )} 
-          {tabBtn(
-            "Machining",
-            "machining",
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-            </svg>,
-            machiningSchedule.length,
-          )}*/}
+          )} */}
         </div>
       </div>
 
-      {/* Validation warnings banner */}
+      {/* ── Validation warnings ── */}
       {warnings.length > 0 && (
         <div
           style={{
@@ -451,7 +565,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Main layout */}
+      {/* ── Main layout ── */}
       <div
         style={{
           maxWidth: 1400,
@@ -494,6 +608,66 @@ export default function App() {
             minHeight: 680,
           }}
         >
+          {/* Tab nav */}
+          <div
+            style={{
+              display: "flex",
+              gap: 7,
+              flexWrap: "wrap",
+              marginBottom: 16,
+            }}
+          >
+            {/* Tab buttons */}
+            {tabBtn(
+              "3D View",
+              "3d-view",
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                <line x1="12" y1="22.08" x2="12" y2="12" />
+              </svg>,
+            )}
+            {tabBtn(
+              "Cut List",
+              "cutlist",
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M3 6h18M3 12h18M3 18h18" />
+              </svg>,
+              stats.totalParts,
+            )}
+            {tabBtn(
+              "Nesting",
+              "optimization",
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+              </svg>,
+              stats.totalSheets,
+            )}
+          </div>
+
           {mainTab === "3d-view" && (
             <ThreeDViewer
               config={config}
@@ -529,7 +703,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Selected section chip */}
+      {/* ── Selected section chip ── */}
       {selectedSection && (
         <div
           style={{
@@ -563,6 +737,21 @@ export default function App() {
             ×
           </button>
         </div>
+      )}
+
+      {/* ── Save modal ── */}
+      {saveModalOpen && (
+        <SaveDesignModal
+          initialName={designName}
+          initialDescription={designDescription}
+          error={saveError}
+          isPending={isPending}
+          onSave={handleSave}
+          onClose={() => {
+            setSaveModalOpen(false);
+            setSaveError(null);
+          }}
+        />
       )}
     </div>
   );
