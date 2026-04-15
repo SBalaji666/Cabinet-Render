@@ -139,7 +139,7 @@ export default function ConfigPanel({
       </div>
 
       {/* Tolerances */}
-      {/* <div style={sectionStyle}>
+      <div style={sectionStyle}>
         <div style={headerStyle}>TOLERANCES (mm)</div>
         <div
           style={{
@@ -151,7 +151,7 @@ export default function ConfigPanel({
           {[
             ["Door Gap", "doorGap"],
             ["Edge Band", "edgeBanding"],
-            ["Saw Kerf", "sawKerf"],
+            ["Shelf Offset", "sawKerf"],
           ].map(([lbl, key]) => (
             <label key={key} style={labelStyle}>
               {lbl}
@@ -172,7 +172,7 @@ export default function ConfigPanel({
             </label>
           ))}
         </div>
-      </div> */}
+      </div>
 
       {/* Hardware */}
       <div style={sectionStyle}>

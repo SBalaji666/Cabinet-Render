@@ -297,11 +297,11 @@ export const CONSTRUCTION_TYPES = {
 
 // ─── DOOR STYLES ──────────────────────────────────────────────────────────────
 export const DOOR_OVERLAY_TYPES = {
-  full: { id: "full", name: "Full Overlay", gapPerSide: 2 },
+  full: { id: "full", name: "Full Overlay", gapPerSide: 1 },
   half: {
     id: "half",
     name: "Half Overlay",
-    gapPerSide: 2,
+    gapPerSide: 1,
     dividerVisible: true,
   },
   inset: { id: "inset", name: "Inset", gapPerSide: 3 },
@@ -321,7 +321,7 @@ export const DEFAULTS = {
   tolerances: {
     doorGap: 2,
     edgeBanding: 2,
-    sawKerf: 3,
+    sawKerf: 10,
   },
   joinery: "butt",
   drawerSlide: "blum-tandem-550",

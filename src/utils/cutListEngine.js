@@ -124,7 +124,7 @@ export function generateCutList(config) {
     drawerSide: dst,
     drawerBottom: dbt,
   } = materials;
-  const { edgeBanding: ebt } = tolerances;
+  const { edgeBanding: ebt, doorGap: dg, sawKerf: offset } = tolerances;
 
   const joinery =
     JOINERY_TYPES[hardware.joinery?.toUpperCase()] || JOINERY_TYPES.BUTT;
@@ -307,7 +307,8 @@ export function generateCutList(config) {
       const doorWidth =
         doorOverlay.id === "inset"
           ? interiorWidth - gapPerSide * 2
-          : sw - gapPerSide * 2;
+          : // : sw - gapPerSide * 2;
+            sw - gapPerSide * dg;
 
       if (drawerCount > 0 && placement === "custom") {
         // <-- CUSTOM LOGIC RETAINED -->
@@ -382,7 +383,8 @@ export function generateCutList(config) {
         const doorHeight =
           doorOverlay.id === "inset"
             ? internalHeight - gapPerSide * 2
-            : boxHeight - 4; // -4mm to account for standard top/bottom gaps
+            : // : boxHeight - 4; // -4mm to account for standard top/bottom gaps
+              boxHeight;
 
         const { count: hingeCount } = hingeLayout(
           doorHeight,
@@ -408,9 +410,11 @@ export function generateCutList(config) {
 
     // ── SHELVES ──
     if (section.shelves > 0) {
-      const shelfWidth =
-        interiorWidth - (shelfSys.clearance || 0) * 2 - ebt * 2;
-      const shelfDepth = interiorDepth - 10 - ebt; // 10mm setback
+      // const shelfWidth =
+      //   interiorWidth - (shelfSys.clearance || 0) * 2 - ebt * 2;
+      // const shelfDepth = interiorDepth - 10 - ebt; // 10mm setback
+      const shelfWidth = interiorWidth;
+      const shelfDepth = interiorDepth - offset;
 
       add({
         part: "Shelf",
