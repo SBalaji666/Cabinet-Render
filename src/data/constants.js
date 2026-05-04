@@ -47,7 +47,7 @@ export const DRAWER_SLIDES = {
     model: "Tandem 550H",
     type: "undermount",
     maxLoad: 30, // kg
-    clearancePerSide: 12.5, // mm per side
+    clearancePerSide: 13, // mm per side
     minDepth: 270,
     maxDepth: 550,
     // NOTE: These are Blum NL (Nominal Length) runner height values from spec sheet,
@@ -321,7 +321,8 @@ export const DEFAULTS = {
   tolerances: {
     doorGap: 2,
     edgeBanding: 2,
-    sawKerf: 10,
+    sawKerf: 3,
+    offset: 10,
   },
   joinery: "butt",
   drawerSlide: "blum-tandem-550",

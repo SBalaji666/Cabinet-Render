@@ -593,8 +593,9 @@ export class CabinetRenderer {
       doorOverlay.id === "inset" ? bt + cD - dt / 2 : bt + cD + 1 + dt / 2;
 
     const drawerCount = section.drawers?.count || 0;
-    const drawerHeight = section.drawers?.height || 120;
+    const drawerHeights = section.drawers?.heights || []; // NEW: Array of heights
     const placement = section.drawers?.placement || "bottom";
+    const isInternal = section.drawers?.isInternal || false; // NEW: Explicit toggle
 
     const floorY = plinthH + ct;
     const ceilingY = plinthH + H - ct;
@@ -606,7 +607,11 @@ export class CabinetRenderer {
 
     // ── 1. DRAWERS ────────────────────────────
     if (drawerCount > 0) {
-      const totalDrawerHeight = drawerCount * drawerHeight;
+      // Calculate total height using the individual heights array
+      const totalDrawerHeight = drawerHeights
+        .slice(0, drawerCount)
+        .reduce((sum, h) => sum + (h || 120), 0);
+
       if (placement === "bottom") {
         drawerAreaStart = floorY;
         drawerAreaEnd = floorY + totalDrawerHeight;
@@ -625,48 +630,140 @@ export class CabinetRenderer {
           ? ceilingY - offsetMm - totalDrawerHeight - ct
           : floorY + offsetMm + ct;
         drawerAreaEnd = drawerAreaStart + totalDrawerHeight;
+      } else if (placement === "full") {
+        drawerAreaStart = floorY;
+        drawerAreaEnd = floorY + totalDrawerHeight;
       }
 
+      // Track the Y position progressively as we stack drawers of varying heights
+      let currentDrawerY = drawerAreaStart;
+
       for (let i = 0; i < drawerCount; i++) {
-        const drawerY = drawerAreaStart + i * drawerHeight + drawerHeight / 2;
+        // Read the specific height for this drawer
+        const drawerHeight = drawerHeights[i] || 120;
+
+        // Calculate center Y for this specific drawer
+        const drawerY = currentDrawerY + drawerHeight / 2;
+        currentDrawerY += drawerHeight; // Advance the pointer for the next drawer
+
         const drawerGroupTarget = new THREE.Group();
-        // If placement is custom, it is exposed. Otherwise, it is hidden behind a door.
-        const isInternal = placement !== "custom";
         drawerGroupTarget.userData = {
           targetZ: 0,
           openOffset: cD * 0.65,
           isInternal,
         };
 
-        // Drawer Box
-        const dBoxGeo = new THREE.BoxGeometry(
-          intW - 50,
-          drawerHeight - 15,
-          cD - 20,
+        // Calculate proper Z depths for internal vs exposed drawer faces
+        let drawerFaceZ = doorZ;
+        if (isInternal) {
+          const internalFrontZ =
+            doorOverlay.id === "inset" ? bt + cD - dt - 2 : bt + cD - 2;
+          drawerFaceZ = internalFrontZ - dt / 2;
+        }
+
+        // ─── PERFECT DRAWER BOX MATH ───
+        const backPanelInsideZ = bt;
+        const frontOfDrawerBoxZ = drawerFaceZ - dt / 2;
+        const dBoxDepth = frontOfDrawerBoxZ - (backPanelInsideZ + 10);
+        const dBoxZ = frontOfDrawerBoxZ - dBoxDepth / 2;
+
+        const boxWidth = intW - 50;
+        const boxHeight = drawerHeight - 15;
+        const sideT = 12;
+
+        // Left Side
+        const leftGeo = new THREE.BoxGeometry(sideT, boxHeight, dBoxDepth);
+        this.createPart(
+          leftGeo,
+          this.materials.drawerFace,
+          intX - boxWidth / 2 + sideT / 2,
+          drawerY,
+          dBoxZ,
+          0x444444,
+          drawerGroupTarget,
+        );
+
+        // Right Side
+        const rightGeo = new THREE.BoxGeometry(sideT, boxHeight, dBoxDepth);
+        this.createPart(
+          rightGeo,
+          this.materials.drawerFace,
+          intX + boxWidth / 2 - sideT / 2,
+          drawerY,
+          dBoxZ,
+          0x444444,
+          drawerGroupTarget,
+        );
+
+        // Front Side
+        const frontGeo = new THREE.BoxGeometry(
+          boxWidth - sideT * 2,
+          boxHeight,
+          sideT,
         );
         this.createPart(
-          dBoxGeo,
+          frontGeo,
           this.materials.drawerFace,
           intX,
           drawerY,
-          bt + (cD - 20) / 2,
+          frontOfDrawerBoxZ - sideT / 2,
+          0x444444,
+          drawerGroupTarget,
+        );
+
+        // Back Side
+        const backGeo = new THREE.BoxGeometry(
+          boxWidth - sideT * 2,
+          boxHeight,
+          sideT,
+        );
+        this.createPart(
+          backGeo,
+          this.materials.drawerFace,
+          intX,
+          drawerY,
+          frontOfDrawerBoxZ - dBoxDepth + sideT / 2,
+          0x444444,
+          drawerGroupTarget,
+        );
+
+        // Bottom Panel
+        const bottomGeo = new THREE.BoxGeometry(
+          boxWidth - sideT * 2,
+          6,
+          dBoxDepth - sideT * 2,
+        );
+        this.createPart(
+          bottomGeo,
+          this.materials.drawerFace,
+          intX,
+          drawerY - boxHeight / 2 + 3,
+          dBoxZ,
           0x444444,
           drawerGroupTarget,
         );
 
         // Drawer Face
+        const currentDoorWidth = isInternal
+          ? intW - doorGap * 2 - 4
+          : doorWidth;
+        const currentFaceX = isInternal
+          ? intX
+          : doorOverlay.id === "inset"
+            ? intX
+            : extX;
+
         const dFaceGeo = new THREE.BoxGeometry(
-          doorWidth,
+          currentDoorWidth,
           drawerHeight - doorGap * 2,
           dt,
         );
-        const faceX = doorOverlay.id === "inset" ? intX : extX;
         this.createPart(
           dFaceGeo,
           this.materials.door,
-          faceX,
+          currentFaceX,
           drawerY,
-          doorZ,
+          drawerFaceZ,
           0x333333,
           drawerGroupTarget,
         );
@@ -675,11 +772,15 @@ export class CabinetRenderer {
         const dHandleGeo = new THREE.CylinderGeometry(
           4,
           4,
-          doorWidth * 0.45,
+          currentDoorWidth * 0.45,
           16,
         ).rotateZ(Math.PI / 2);
         const handleMesh = new THREE.Mesh(dHandleGeo, this.materials.handle);
-        handleMesh.position.set(faceX, drawerY, doorZ + dt / 2 + 15);
+        handleMesh.position.set(
+          currentFaceX,
+          drawerY,
+          drawerFaceZ + dt / 2 + 15,
+        );
         drawerGroupTarget.add(handleMesh);
 
         this.drawers.push(drawerGroupTarget);
@@ -716,7 +817,6 @@ export class CabinetRenderer {
       if (dHeight < 50) return;
 
       const doorHinge = new THREE.Group();
-      // Pivot logic
       const pivotX =
         doorOverlay.id === "inset"
           ? intX - doorWidth / 2
@@ -724,7 +824,7 @@ export class CabinetRenderer {
       doorHinge.position.set(pivotX, startY + dHeight / 2, doorZ - dt / 2);
 
       const doorGeo = new THREE.BoxGeometry(doorWidth, dHeight, dt);
-      doorGeo.translate(doorWidth / 2, 0, dt / 2); // Shift mesh so pivot is at corner
+      doorGeo.translate(doorWidth / 2, 0, dt / 2);
 
       const doorMat = this.materials.door.clone();
       doorMat.transparent = true;
@@ -741,7 +841,6 @@ export class CabinetRenderer {
       );
       doorHinge.add(lines);
 
-      // Handle
       const handleGeo = new THREE.CylinderGeometry(
         5,
         5,
@@ -757,19 +856,25 @@ export class CabinetRenderer {
       group.add(doorHinge);
     };
 
-    // Construct doors avoiding drawer banks
-    if (drawerCount > 0 && placement === "custom") {
-      buildDoor(drawerAreaEnd + ct, ceilingY + ct); // Custom logic uses dividers, fill space up to top
-      buildDoor(floorY - ct, drawerAreaStart - ct);
-    } else if (drawerCount > 0 && placement === "bottom") {
-      buildDoor(drawerAreaEnd, ceilingY + ct);
-    } else if (drawerCount > 0 && placement === "top") {
-      buildDoor(floorY - ct, drawerAreaStart);
+    // Calculate absolute top and bottom standard bounds for doors
+    const cabBottom = doorOverlay.id === "inset" ? floorY : plinthH + 2;
+    const cabTop = doorOverlay.id === "inset" ? ceilingY : plinthH + H - 2;
+
+    // NEW: Split doors based explicitly on isInternal flag AND placement!
+    if (drawerCount > 0 && !isInternal) {
+      if (placement === "custom") {
+        buildDoor(drawerAreaEnd + ct, cabTop);
+        buildDoor(cabBottom, drawerAreaStart - ct);
+      } else if (placement === "bottom") {
+        buildDoor(drawerAreaEnd, cabTop);
+      } else if (placement === "top") {
+        buildDoor(cabBottom, drawerAreaStart);
+      } else if (placement === "full") {
+        // No doors needed, drawers take up the entire section
+      }
     } else {
-      // Full height door (starts below floorY to cover bottom edge if full overlay)
-      const startY = doorOverlay.id === "inset" ? floorY : plinthH + 2;
-      const endY = doorOverlay.id === "inset" ? ceilingY : plinthH + H - 2;
-      buildDoor(startY, endY);
+      // If internal, or no drawers, generate one full height door covering everything
+      buildDoor(cabBottom, cabTop);
     }
 
     // ── 4. SHELVES ────────────────────────────────────

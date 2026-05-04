@@ -68,40 +68,43 @@ export function validateConfig(config) {
 
     if (s.drawers.count > 0 && slide) {
       const bt = materials.back;
-      // Updated carcass depth logic for validation
       const carcassDepth = overall.depth - bt - materials.door - 1;
       const drawerBoxDepth = clamp(
-        carcassDepth - 10, // 10mm setback
+        carcassDepth - 10,
         slide.minDepth,
         slide.maxDepth,
       );
       if (drawerBoxDepth < slide.minDepth)
         warnings.push(
-          `Section ${s.label}: Cabinet depth too small for ${slide.brand} ${slide.model} (min ${slide.minDepth} mm).`,
+          `Section ${s.label}: Cabinet depth too small for ${slide.brand} ${slide.model}.`,
         );
 
       const minH = slide.heights[0];
       const maxH = slide.heights[slide.heights.length - 1];
-      if (s.drawers.height < minH || s.drawers.height > maxH)
-        warnings.push(
-          `Section ${s.label}: Drawer height ${s.drawers.height} mm outside ${slide.brand} ${slide.model} compatible range (${minH}–${maxH} mm).`,
-        );
+      const heights = s.drawers.heights || [];
+
+      let totalStack = 0;
+      heights.slice(0, s.drawers.count).forEach((h, i) => {
+        totalStack += h;
+        if (h < minH || h > maxH) {
+          warnings.push(
+            `Section ${s.label}: Drawer ${i + 1} height ${h} mm outside compatible range (${minH}–${maxH} mm).`,
+          );
+        }
+      });
 
       const internalHeight = boxHeight - ct * 2;
-      const totalStack = s.drawers.count * s.drawers.height;
-
       let requiredStructuralHeight = totalStack;
-      if (s.drawers.placement === "custom")
-        requiredStructuralHeight += ct * 2; // Needs 2 dividers
+      if (s.drawers.placement === "custom") requiredStructuralHeight += ct * 2;
       else if (
         s.drawers.placement === "top" ||
         s.drawers.placement === "bottom"
       )
-        requiredStructuralHeight += ct; // Needs 1 divider
+        requiredStructuralHeight += ct;
 
       if (requiredStructuralHeight > internalHeight)
         warnings.push(
-          `Section ${s.label}: Total drawer stack + required dividers (${requiredStructuralHeight} mm) exceeds internal height (${internalHeight} mm).`,
+          `Section ${s.label}: Total drawer stack + dividers (${requiredStructuralHeight} mm) exceeds internal height (${internalHeight} mm).`,
         );
     }
   });
@@ -124,7 +127,7 @@ export function generateCutList(config) {
     drawerSide: dst,
     drawerBottom: dbt,
   } = materials;
-  const { edgeBanding: ebt, doorGap: dg, sawKerf: offset } = tolerances;
+  const { edgeBanding: ebt, doorGap: dg, sawKerf: sk, offset } = tolerances;
 
   const joinery =
     JOINERY_TYPES[hardware.joinery?.toUpperCase()] || JOINERY_TYPES.BUTT;
@@ -442,80 +445,102 @@ export function generateCutList(config) {
     if (drawerCount > 0) {
       const slide =
         DRAWER_SLIDES[hardware.drawerSlide] || DRAWER_SLIDES["blum-tandem-550"];
-      const drawerHeight = section.drawers.height;
-      const drawerBoxOuterWidth =
-        interiorWidth - slide.clearancePerSide * 2 - ebt * 2;
-      const drawerBoxDepth = clamp(
-        interiorDepth - 10,
-        slide.minDepth,
-        slide.maxDepth,
-      );
-      const drawerBoxSideHeight = drawerHeight - dbt;
+      const placement = section.drawers.placement || "bottom";
+      const isInternal = section.drawers.isInternal || false;
+      const drawerHeights = section.drawers.heights || [];
 
-      add({
-        part: "Drawer Box Side",
-        section: section.label,
-        material: `Drawer Side ${dst}mm`,
-        qty: drawerCount * 2,
-        length: drawerBoxDepth,
-        width: drawerBoxSideHeight,
-        thickness: dst,
-        grain: "length",
-        edgeBand: "top edge",
-        note: `${section.label} — drawer sides`,
-        machining: construction.requiresCamLocks
-          ? "Cam lock boring on front/back ends"
-          : "Groove for bottom panel, 6 mm from bottom edge",
-      });
-      const drawerFrontBackLength = drawerBoxOuterWidth - dst * 2;
-      add({
-        part: "Drawer Box Front/Back",
-        section: section.label,
-        material: `Drawer Side ${dst}mm`,
-        qty: drawerCount * 2,
-        length: drawerFrontBackLength,
-        width: drawerBoxSideHeight,
-        thickness: dst,
-        grain: "length",
-        edgeBand: "top edge",
-        note: `${section.label} — drawer F/B`,
-        machining: construction.requiresCamLocks
-          ? "Cam lock boring"
-          : "Groove for bottom panel, 6 mm from bottom edge",
-      });
-      add({
-        part: "Drawer Bottom",
-        section: section.label,
-        material: `Drawer Bottom ${dbt}mm`,
-        qty: drawerCount,
-        length: drawerBoxDepth - 10,
-        width: drawerBoxOuterWidth - dst * 2,
-        thickness: dbt,
-        grain: "length",
-        edgeBand: "none",
-        note: `${section.label} — drawer base`,
-      });
+      // Loop through EACH drawer to generate precise cut sizes based on its individual height
+      for (let i = 0; i < drawerCount; i++) {
+        const drawerHeight = drawerHeights[i] || 120; // fallback
 
-      const drawerFaceWidth =
-        doorOverlay.id === "inset"
-          ? interiorWidth - gapPerSide * 2
-          : sw - gapPerSide * 2;
-      const drawerFaceHeight = drawerHeight - gapPerSide;
+        // const drawerBoxOuterWidth =
+        //   interiorWidth - slide.clearancePerSide * 2 - ebt * 2;
+        const drawerBoxOuterWidth = interiorWidth - slide.clearancePerSide * 2;
+        console.log({ interiorWidth, cle: slide.clearancePerSide });
+        const drawerBoxDepth = isInternal
+          ? // ? interiorDepth - dt - dst - 10 // internal drawer: subtract door thickness, drawer side thickness, and setback
+            interiorDepth - dt - dst - 10 // internal drawer: subtract door thickness, drawer side thickness, and setback
+          : interiorDepth - 10; // external drawer: just subtract setback
 
-      add({
-        part: "Drawer Face",
-        section: section.label,
-        material: `Drawer Face ${dt}mm`,
-        qty: drawerCount,
-        length: drawerFaceHeight,
-        width: drawerFaceWidth,
-        thickness: dt,
-        grain: "height",
-        edgeBand: "all 4 edges",
-        note: `${section.label} — drawer front`,
-        machining: "Handle drilling per template",
-        hardware: `${slide.brand} ${slide.model} × ${drawerCount} sets`,
-      });
+        // const drawerBoxDepth = availableDepth - 10; // 10mm setback from back panel for clearance
+        const drawerBoxSideHeight = drawerHeight - 10; // 10mm setback from top of drawer face
+
+        add({
+          part: `Drawer Box Side (D${i + 1})`,
+          section: section.label,
+          material: `Drawer Side ${dst}mm`,
+          qty: drawerCount * 2, // 2 per drawer
+          length: drawerBoxDepth,
+          width: drawerBoxSideHeight,
+          thickness: dst,
+          grain: "length",
+          edgeBand: "top edge",
+          note: `${section.label} — drawer sides (10mm setback from back panel)`,
+          machining: construction.requiresCamLocks
+            ? "Cam lock boring on front/back ends"
+            : "Groove for bottom panel",
+        });
+
+        const drawerFrontBackLength = drawerBoxOuterWidth - dst * 2;
+        add({
+          part: `Drawer Box Front/Back (D${i + 1})`,
+          section: section.label,
+          material: `Drawer Side ${dst}mm`,
+          qty: drawerCount * 2,
+          length: drawerFrontBackLength,
+          width: drawerBoxSideHeight,
+          thickness: dst,
+          grain: "length",
+          edgeBand: "top edge",
+          note: `${section.label} — drawer F/B`,
+          machining: construction.requiresCamLocks
+            ? "Cam lock boring"
+            : "Groove for bottom panel",
+        });
+
+        add({
+          part: `Drawer Bottom (D${i + 1})`,
+          section: section.label,
+          material: `Drawer Bottom ${dbt}mm`,
+          qty: drawerCount,
+          length: drawerBoxDepth - 10,
+          width: drawerBoxOuterWidth - dst * 2,
+          thickness: dbt,
+          grain: "length",
+          edgeBand: "none",
+          note: `${section.label} — drawer base`,
+        });
+
+        // const drawerFaceWidth = isInternal
+        //   ? interiorWidth - gapPerSide * 2 - 4 // narrow enough to fit inside carcass
+        //   : doorOverlay.id === "inset"
+        //     ? interiorWidth - gapPerSide * 2
+        //     : sw - gapPerSide * 2;
+        // const drawerFaceHeight = drawerHeight - gapPerSide;
+
+        const drawerFaceWidth = isInternal
+          ? interiorWidth
+          : doorOverlay.id === "inset"
+            ? interiorWidth
+            : sw;
+
+        const drawerFaceHeight = drawerHeight;
+
+        add({
+          part: `Drawer Face (D${i + 1})`,
+          section: section.label,
+          material: `Drawer Face ${dt}mm`,
+          qty: drawerCount,
+          length: drawerFaceHeight,
+          width: drawerFaceWidth,
+          thickness: dt,
+          grain: "height",
+          edgeBand: "all 4 edges",
+          note: `${section.label} — drawer front`,
+          machining: "Handle drilling per template",
+          hardware: `${slide.brand} ${slide.model} × 1 set`,
+        });
+      }
     }
   });
 

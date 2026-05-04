@@ -151,7 +151,7 @@ export default function ConfigPanel({
           {[
             ["Door Gap", "doorGap"],
             ["Edge Band", "edgeBanding"],
-            ["Shelf Offset", "sawKerf"],
+            ["Shelf Offset", "offset"],
           ].map(([lbl, key]) => (
             <label key={key} style={labelStyle}>
               {lbl}
@@ -178,43 +178,6 @@ export default function ConfigPanel({
       <div style={sectionStyle}>
         <div style={headerStyle}>HARDWARE</div>
         {[
-          // [
-          //   "Joinery",
-          //   "joinery",
-          //   Object.keys(JOINERY_TYPES).map((k) => ({
-          //     v: k.toLowerCase(),
-          //     l: JOINERY_TYPES[k].name,
-          //   })),
-          // ],
-          // [
-          //   "Door Overlay",
-          //   "doorOverlay",
-          //   Object.keys(DOOR_OVERLAY_TYPES).map((k) => ({
-          //     v: k,
-          //     l: DOOR_OVERLAY_TYPES[k].name,
-          //   })),
-          // ],
-          // [
-          //   "Hinge",
-          //   "hinge",
-          //   Object.keys(HINGES).map((k) => ({ v: k, l: HINGES[k].model })),
-          // ],
-          // [
-          //   "Drawer Slide",
-          //   "drawerSlide",
-          //   Object.keys(DRAWER_SLIDES).map((k) => ({
-          //     v: k,
-          //     l: `${DRAWER_SLIDES[k].brand} ${DRAWER_SLIDES[k].model}`,
-          //   })),
-          // ],
-          // [
-          //   "Shelf System",
-          //   "shelfSystem",
-          //   Object.keys(SHELF_SYSTEMS).map((k) => ({
-          //     v: k,
-          //     l: SHELF_SYSTEMS[k].name,
-          //   })),
-          // ],
           [
             "Plinth",
             "plinth",
@@ -365,25 +328,30 @@ export default function ConfigPanel({
 
         <div style={{ maxHeight: 420, overflowY: "auto", paddingRight: 4 }}>
           {sections.map((s) => {
-            // NEW: Determine if this specific section should be disabled
             const isAnySelected = selectedSection !== null;
             const isSelected = selectedSection?.id === s.id;
             const isDisabled = isAnySelected && !isSelected;
+
+            // Safe defaults for drawers
+            const drawerCount = s.drawers?.count || 0;
+            const drawerHeights = s.drawers?.heights || [];
+            const isInternal = s.drawers?.isInternal || false;
+
+            console.log({ drawerHeights });
 
             return (
               <div
                 key={s.id}
                 id={`section-${s.id}`}
                 style={{
-                  background: isSelected ? `${ui.accent}15` : ui.panel, // Slight highlight for active
+                  background: isSelected ? `${ui.accent}15` : ui.panel,
                   border: `1px solid ${isSelected ? ui.accent : ui.border}`,
                   borderRadius: 8,
                   padding: 10,
                   marginBottom: 8,
-                  // NEW: Dim the section and disable all clicks/inputs if it's not the selected one
                   opacity: isDisabled ? 0.4 : 1,
                   pointerEvents: isDisabled ? "none" : "auto",
-                  transition: "all 0.3s ease", // Smooth fade effect
+                  transition: "all 0.3s ease",
                 }}
               >
                 {/* Label + remove */}
@@ -523,22 +491,29 @@ export default function ConfigPanel({
                       gap: 6,
                     }}
                   >
+                    {/* NEW: Updated Count logic to generate heights array */}
                     <label style={{ fontSize: 9, color: ui.muted }}>
                       Count
                       <input
                         type="number"
                         min={0}
                         max={20}
-                        value={s.drawers?.count || 0}
-                        onChange={(e) =>
+                        value={drawerCount}
+                        onChange={(e) => {
+                          const newCount = Number(e.target.value);
+                          const newHeights = Array(newCount)
+                            .fill(120) // default height
+                            .map((def, i) => drawerHeights[i] || def); // preserve existing heights
+
                           updateSection({
                             ...s,
                             drawers: {
                               ...(s.drawers || {}),
-                              count: Number(e.target.value),
+                              count: newCount,
+                              heights: newHeights,
                             },
-                          })
-                        }
+                          });
+                        }}
                         style={{
                           ...inputStyle,
                           padding: "4px 6px",
@@ -547,19 +522,18 @@ export default function ConfigPanel({
                         }}
                       />
                     </label>
+
+                    {/* NEW: Explicit Internal vs External dropdown */}
                     <label style={{ fontSize: 9, color: ui.muted }}>
-                      Height (mm)
-                      <input
-                        type="number"
-                        min={40}
-                        max={500}
-                        value={s.drawers?.height || 120}
+                      Style
+                      <select
+                        value={isInternal ? "internal" : "external"}
                         onChange={(e) =>
                           updateSection({
                             ...s,
                             drawers: {
                               ...(s.drawers || {}),
-                              height: Number(e.target.value),
+                              isInternal: e.target.value === "internal",
                             },
                           })
                         }
@@ -569,8 +543,12 @@ export default function ConfigPanel({
                           fontSize: 10,
                           marginTop: 2,
                         }}
-                      />
+                      >
+                        <option value="external">External</option>
+                        <option value="internal">Internal</option>
+                      </select>
                     </label>
+
                     <label style={{ fontSize: 9, color: ui.muted }}>
                       Placement
                       <select
@@ -594,13 +572,57 @@ export default function ConfigPanel({
                         <option value="top">Top</option>
                         <option value="bottom">Bottom</option>
                         <option value="full">Full</option>
-                        <option value="custom">Custom</option>{" "}
-                        {/* NEW OPTION */}
+                        <option value="custom">Custom (Offset)</option>
                       </select>
                     </label>
                   </div>
 
-                  {/* NEW: Conditional Custom Offset Inputs */}
+                  {/* NEW: Individual Heights Loop */}
+                  {drawerCount > 0 && (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fill, minmax(50px, 1fr))",
+                        gap: 6,
+                        marginTop: 8,
+                        paddingTop: 8,
+                        borderTop: `1px dashed ${ui.border}`,
+                      }}
+                    >
+                      {Array.from({ length: drawerCount }).map((_, i) => (
+                        <label key={i} style={{ fontSize: 9, color: ui.muted }}>
+                          H: {i + 1}
+                          <input
+                            type="number"
+                            min={40}
+                            max={1000}
+                            value={drawerHeights[i] || 120}
+                            // value={drawerHeights[i]}
+                            onChange={(e) => {
+                              const newHeights = [...drawerHeights];
+                              newHeights[i] = Number(e.target.value);
+                              updateSection({
+                                ...s,
+                                drawers: {
+                                  ...(s.drawers || {}),
+                                  heights: newHeights,
+                                },
+                              });
+                            }}
+                            style={{
+                              ...inputStyle,
+                              padding: "4px 6px",
+                              fontSize: 10,
+                              marginTop: 2,
+                            }}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Conditional Custom Offset Inputs */}
                   {s.drawers?.placement === "custom" && (
                     <div
                       style={{
