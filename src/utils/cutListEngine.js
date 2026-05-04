@@ -161,28 +161,21 @@ export function generateCutList(config) {
       section: "Base",
       material: `Carcass ${ct}mm`,
       qty: 1,
-      length: L - ct * 2,
+      length: L - ct * 2, // fits between the two full-height side panels
       width: plinthHeight,
       thickness: ct,
       grain: "length",
       edgeBand: "top edge",
-      note: `${plinthHeight} mm toe-kick, ${plinth.setback} mm setback`,
+      note: `${plinthHeight} mm toe-kick rail, ${plinth.setback} mm setback. Sits between side panels.`,
     });
-    add({
-      part: "Plinth Side Rail",
-      section: "Base",
-      material: `Carcass ${ct}mm`,
-      qty: 2,
-      length: carcassDepth - plinth.setback,
-      width: plinthHeight,
-      thickness: ct,
-      grain: "length",
-      edgeBand: "top edge",
-      note: "Side plinth rails — abuts outer face of cabinet side panel",
-    });
+
+    // Plinth side rails intentionally omitted.
+    // The full-height side panels (below) enclose the plinth zone completely.
   }
 
   // ── 2. CARCASS ──
+
+  // Top Panel — full width, caps both side panels
   add({
     part: "Top Panel",
     section: "Carcass",
@@ -193,7 +186,7 @@ export function generateCutList(config) {
     thickness: ct,
     grain: "length",
     edgeBand: "front edge, left & right ends",
-    note: "Full-width top panel (Full overlay, caps sides)",
+    note: "Full-width top panel — caps both side panels",
     machining: joinery.requiresBoring
       ? "Dowel/cam holes on underside at joint positions"
       : "None",
@@ -209,25 +202,25 @@ export function generateCutList(config) {
     thickness: ct,
     grain: "length",
     edgeBand: "front edge",
-    note: `Sits between side panels`,
+    note: "Sits between side panels, at top of plinth zone",
     machining: joinery.requiresBoring
       ? "Dowel/cam holes on topside at joint positions"
       : "None",
   });
 
-  const sideHeight = boxHeight - ct; // Sits under the top panel
+  const fullSideHeight = plinthHeight + boxHeight - ct;
   ["Left Side Panel", "Right Side Panel"].forEach((side) => {
     add({
       part: side,
       section: "Carcass",
       material: `Carcass ${ct}mm`,
       qty: 1,
-      length: sideHeight,
+      length: fullSideHeight, // FIX: was `boxHeight - ct`, now includes plinth
       width: carcassDepth,
       thickness: ct,
       grain: "height",
       edgeBand: "front edge",
-      note: `${side} — Sits under top panel`,
+      note: `${side} — full height including plinth zone (${plinthHeight} mm plinth + ${boxHeight - ct} mm box). Sits under top panel.`,
       machining:
         joinery.id === "dado"
           ? "Dado grooves for dividers & fixed shelves"
@@ -306,94 +299,19 @@ export function generateCutList(config) {
       const hinge = HINGES[hardware.hinge] || HINGES["blum-clip-top-110"];
       const drawerCount = section.drawers?.count || 0;
       const placement = section.drawers?.placement || "bottom";
+      const isInternal = section.drawers?.isInternal || false;
 
       const doorWidth =
         doorOverlay.id === "inset"
           ? interiorWidth - gapPerSide * 2
-          : // : sw - gapPerSide * 2;
-            sw - gapPerSide * dg;
+          : sw - gapPerSide * dg;
 
-      if (drawerCount > 0 && placement === "custom") {
-        // <-- CUSTOM LOGIC RETAINED -->
-        const addDivider = (pos) => {
-          add({
-            part: `Fixed Divider (${pos})`,
-            section: section.label,
-            material: `Carcass ${ct}mm`,
-            qty: 1,
-            length: interiorWidth,
-            width: interiorDepth - 5, // slight setback
-            thickness: ct,
-            grain: "length",
-            edgeBand: "front edge",
-            note: `${section.label} — Structural horizontal divider ${pos} drawer bank.`,
-            machining: joinery.requiresBoring
-              ? "Boring on left/right edges"
-              : "None",
-          });
-        };
-
-        addDivider("above");
-        addDivider("below");
-
-        const totalDrawerStack = drawerCount * section.drawers.height;
-        const isFromTop = section.drawers?.customFrom === "top";
-        const percentage = (section.drawers?.customPercentage ?? 20) / 100;
-        const availableH = internalHeight - totalDrawerStack - ct * 2;
-
-        let offsetMm = Math.round(availableH * percentage);
-        offsetMm = clamp(offsetMm, 0, availableH);
-
-        let topCavityH, bottomCavityH;
-        if (isFromTop) {
-          topCavityH = offsetMm;
-          bottomCavityH = availableH - topCavityH;
-        } else {
-          bottomCavityH = offsetMm;
-          topCavityH = availableH - bottomCavityH;
-        }
-
-        const addCustomDoor = (prefix, h, coversTop, coversBot) => {
-          let doorH = h;
-          if (doorOverlay.id !== "inset") {
-            if (coversTop) doorH += ct;
-            if (coversBot) doorH += ct;
-          }
-          doorH -= gapPerSide * 2;
-
-          const { count: hingeCount } = hingeLayout(doorH, hinge.hingesPerDoor);
-          add({
-            part: `${prefix} Door Panel`,
-            section: section.label,
-            material: `Door ${dt}mm`,
-            qty: 1,
-            length: Math.round(doorH),
-            width: Math.round(doorWidth),
-            thickness: dt,
-            grain: "height",
-            edgeBand: "all 4 edges",
-            note: `${section.label} — ${prefix.toLowerCase()} door.`,
-            machining: `Hinge cup: ⌀${hinge.cupDiameter} mm × ${hinge.cupDepth} mm deep, ${hinge.boringDistance} mm from edge.`,
-            hardware: `${hinge.brand} ${hinge.model} × ${hingeCount} pcs`,
-          });
-        };
-
-        if (topCavityH > 50) addCustomDoor("Top", topCavityH, true, false);
-        if (bottomCavityH > 50)
-          addCustomDoor("Bottom", bottomCavityH, false, true);
-      } else {
-        // <-- STANDARD DOORS -->
-        const doorHeight =
-          doorOverlay.id === "inset"
-            ? internalHeight - gapPerSide * 2
-            : // : boxHeight - 4; // -4mm to account for standard top/bottom gaps
-              boxHeight;
-
+      // ── Helper: add a door at a given height ──────────────────────────────
+      const addDoor = (doorHeight, label) => {
         const { count: hingeCount } = hingeLayout(
           doorHeight,
           hinge.hingesPerDoor,
         );
-
         add({
           part: "Door Panel",
           section: section.label,
@@ -404,10 +322,111 @@ export function generateCutList(config) {
           thickness: dt,
           grain: "height",
           edgeBand: "all 4 edges",
-          note: `${section.label} — ${doorOverlay.name} door. Pre-band: ${Math.round(doorHeight)}×${Math.round(doorWidth)} mm. Post-band: ${Math.round(doorHeight + ebt * 2)}×${Math.round(doorWidth + ebt * 2)} mm`,
+          note: `${section.label} — ${label}. Pre-band: ${Math.round(doorHeight)}×${Math.round(doorWidth)} mm. Post-band: ${Math.round(doorHeight + ebt * 2)}×${Math.round(doorWidth + ebt * 2)} mm`,
           machining: `Hinge cup: ⌀${hinge.cupDiameter} mm × ${hinge.cupDepth} mm deep, ${hinge.boringDistance} mm from hinge edge. 100 mm from top/bottom (Blum std).`,
           hardware: `${hinge.brand} ${hinge.model} × ${hingeCount} pcs`,
         });
+      };
+
+      // ── CASE 1: Internal drawers → full-height door always ────────────────
+      // The door conceals the internal drawers, so it spans the full opening.
+      if (isInternal && drawerCount > 0) {
+        const doorHeight =
+          doorOverlay.id === "inset"
+            ? internalHeight - gapPerSide * 2
+            : boxHeight;
+        addDoor(
+          doorHeight,
+          `${doorOverlay.name} door (internal drawers behind)`,
+        );
+      }
+
+      // ── CASE 2: External drawers — placement determines split ─────────────
+      else if (!isInternal && drawerCount > 0) {
+        const drawerHeights = section.drawers?.heights || [];
+        const totalDrawerStack = drawerHeights
+          .slice(0, drawerCount)
+          .reduce((sum, h) => sum + (h || 120), 0);
+
+        if (placement === "full") {
+          // No door — drawers fill entire section front
+          // (no addDoor call)
+        } else if (placement === "bottom") {
+          // Door above the drawer bank
+          const doorHeight =
+            doorOverlay.id === "inset"
+              ? internalHeight - totalDrawerStack - gapPerSide * 2
+              : boxHeight - totalDrawerStack;
+          if (doorHeight > 50) {
+            addDoor(doorHeight, `${doorOverlay.name} door above drawer bank`);
+          }
+        } else if (placement === "top") {
+          // Door below the drawer bank
+          const doorHeight =
+            doorOverlay.id === "inset"
+              ? internalHeight - totalDrawerStack - gapPerSide * 2
+              : boxHeight - totalDrawerStack;
+          if (doorHeight > 50) {
+            addDoor(doorHeight, `${doorOverlay.name} door below drawer bank`);
+          }
+        } else if (placement === "custom") {
+          // Two doors: one above and one below the floating drawer bank.
+          // Mirror the exact offset calculation used in buildClosedSection (3D renderer)
+          // so cut-list dimensions match what is rendered.
+
+          const isFromTop = section.drawers?.customFrom === "top";
+          const percentage = (section.drawers?.customPercentage ?? 20) / 100;
+
+          // availableH = internal height minus the drawer stack and the two
+          // structural dividers (ct each) that sandwich the drawer bank.
+          const availableH = internalHeight - totalDrawerStack - ct * 2;
+          let offsetMm = Math.round(availableH * percentage);
+          // clamp so offset never goes negative or overflows
+          offsetMm = Math.max(0, Math.min(offsetMm, availableH));
+
+          // Split the remaining cavity above / below the drawer bank
+          let topCavityH, bottomCavityH;
+          if (isFromTop) {
+            topCavityH = offsetMm;
+            bottomCavityH = availableH - topCavityH;
+          } else {
+            bottomCavityH = offsetMm;
+            topCavityH = availableH - bottomCavityH;
+          }
+
+          // For overlay doors the door panel must cover the structural divider
+          // on the side that abuts the carcass top/bottom panel.
+          // coversTop=true  → add ct to height (door overlaps top panel)
+          // coversBot=true  → add ct to height (door overlaps bottom panel)
+          const calcCustomDoorHeight = (cavityH, coversTop, coversBot) => {
+            let h = cavityH;
+            if (doorOverlay.id !== "inset") {
+              if (coversTop) h += ct;
+              if (coversBot) h += ct;
+            }
+            return h - gapPerSide * 2;
+          };
+
+          // Top door sits between the cabinet top panel and the upper divider
+          const topDoorH = calcCustomDoorHeight(topCavityH, true, false);
+          addDoor(topDoorH, `${doorOverlay.name} top door (above drawer bank)`);
+
+          // Bottom door sits between the lower divider and the cabinet bottom panel
+          const bottomDoorH = calcCustomDoorHeight(bottomCavityH, false, true);
+          addDoor(
+            bottomDoorH,
+            `${doorOverlay.name} bottom door (below drawer bank)`,
+          );
+        }
+      }
+
+      // ── CASE 3: No drawers → standard full-height door ────────────────────
+      else {
+        const doorHeight =
+          doorOverlay.id === "inset"
+            ? internalHeight - gapPerSide * 2
+            : boxHeight;
+        addDoor(doorHeight, `${doorOverlay.name} door`);
       }
     }
 
@@ -451,72 +470,64 @@ export function generateCutList(config) {
 
       // Loop through EACH drawer to generate precise cut sizes based on its individual height
       for (let i = 0; i < drawerCount; i++) {
-        const drawerHeight = drawerHeights[i] || 120; // fallback
+        const drawerHeight = drawerHeights[i] || 120;
 
-        // const drawerBoxOuterWidth =
-        //   interiorWidth - slide.clearancePerSide * 2 - ebt * 2;
         const drawerBoxOuterWidth = interiorWidth - slide.clearancePerSide * 2;
-        console.log({ interiorWidth, cle: slide.clearancePerSide });
         const drawerBoxDepth = isInternal
-          ? // ? interiorDepth - dt - dst - 10 // internal drawer: subtract door thickness, drawer side thickness, and setback
-            interiorDepth - dt - dst - 10 // internal drawer: subtract door thickness, drawer side thickness, and setback
-          : interiorDepth - 10; // external drawer: just subtract setback
+          ? interiorDepth - dt - dst - 10
+          : interiorDepth - 10;
 
-        // const drawerBoxDepth = availableDepth - 10; // 10mm setback from back panel for clearance
-        const drawerBoxSideHeight = drawerHeight - 10; // 10mm setback from top of drawer face
+        const drawerBoxSideHeight = drawerHeight - 10;
 
+        // ── Drawer Box Sides (2 per drawer) ──
         add({
           part: `Drawer Box Side (D${i + 1})`,
           section: section.label,
           material: `Drawer Side ${dst}mm`,
-          qty: drawerCount * 2, // 2 per drawer
+          qty: 2, // FIX: was `drawerCount * 2`
           length: drawerBoxDepth,
           width: drawerBoxSideHeight,
           thickness: dst,
           grain: "length",
           edgeBand: "top edge",
-          note: `${section.label} — drawer sides (10mm setback from back panel)`,
+          note: `${section.label} — drawer ${i + 1} sides (10mm setback from back panel)`,
           machining: construction.requiresCamLocks
             ? "Cam lock boring on front/back ends"
             : "Groove for bottom panel",
         });
 
         const drawerFrontBackLength = drawerBoxOuterWidth - dst * 2;
+
+        // ── Drawer Box Front & Back (2 per drawer) ──
         add({
           part: `Drawer Box Front/Back (D${i + 1})`,
           section: section.label,
           material: `Drawer Side ${dst}mm`,
-          qty: drawerCount * 2,
+          qty: 2, // FIX: was `drawerCount * 2`
           length: drawerFrontBackLength,
           width: drawerBoxSideHeight,
           thickness: dst,
           grain: "length",
           edgeBand: "top edge",
-          note: `${section.label} — drawer F/B`,
+          note: `${section.label} — drawer ${i + 1} F/B`,
           machining: construction.requiresCamLocks
             ? "Cam lock boring"
             : "Groove for bottom panel",
         });
 
+        // ── Drawer Bottom (1 per drawer) ──
         add({
           part: `Drawer Bottom (D${i + 1})`,
           section: section.label,
           material: `Drawer Bottom ${dbt}mm`,
-          qty: drawerCount,
+          qty: 1, // FIX: was `drawerCount`
           length: drawerBoxDepth - 10,
           width: drawerBoxOuterWidth - dst * 2,
           thickness: dbt,
           grain: "length",
           edgeBand: "none",
-          note: `${section.label} — drawer base`,
+          note: `${section.label} — drawer ${i + 1} base`,
         });
-
-        // const drawerFaceWidth = isInternal
-        //   ? interiorWidth - gapPerSide * 2 - 4 // narrow enough to fit inside carcass
-        //   : doorOverlay.id === "inset"
-        //     ? interiorWidth - gapPerSide * 2
-        //     : sw - gapPerSide * 2;
-        // const drawerFaceHeight = drawerHeight - gapPerSide;
 
         const drawerFaceWidth = isInternal
           ? interiorWidth
@@ -526,17 +537,18 @@ export function generateCutList(config) {
 
         const drawerFaceHeight = drawerHeight;
 
+        // ── Drawer Face (1 per drawer) ──
         add({
           part: `Drawer Face (D${i + 1})`,
           section: section.label,
           material: `Drawer Face ${dt}mm`,
-          qty: drawerCount,
+          qty: 1, // FIX: was `drawerCount`
           length: drawerFaceHeight,
           width: drawerFaceWidth,
           thickness: dt,
           grain: "height",
           edgeBand: "all 4 edges",
-          note: `${section.label} — drawer front`,
+          note: `${section.label} — drawer ${i + 1} front face`,
           machining: "Handle drilling per template",
           hardware: `${slide.brand} ${slide.model} × 1 set`,
         });
