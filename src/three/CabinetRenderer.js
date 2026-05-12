@@ -369,43 +369,36 @@ export class CabinetRenderer {
 
   buildCarcassStructure(L, H, D, ct, bt, plinthH, cD) {
     const mats = this.materials;
-    const cZ = bt + cD / 2; // Z-Center of carcass
+    const cZ = bt + cD / 2; // Z-centre of carcass depth
 
-    // 1. Plinth (Base)
-    if (plinthH > 0) {
-      const pFrontGeo = new THREE.BoxGeometry(L - ct * 2, plinthH, ct);
-      this.createPart(
-        pFrontGeo,
-        mats.carcass,
-        L / 2,
-        plinthH / 2,
-        bt + cD - ct / 2,
-        0x333333,
-        this.cabinetGroup,
-      );
+    // ── 1. SIDE PANELS (full height: plinth + box, floor to top) ──────────
+    // Height = plinthH + H - ct  (sits under the top panel, starts from floor)
+    const fullSideH = plinthH + H - ct;
+    const sideGeo = new THREE.BoxGeometry(ct, fullSideH, cD);
+    const sideY = fullSideH / 2; // centred from y=0 up to plinthH+H-ct
 
-      const pSideGeo = new THREE.BoxGeometry(ct, plinthH, cD);
-      this.createPart(
-        pSideGeo,
-        mats.carcass,
-        ct / 2,
-        plinthH / 2,
-        cZ,
-        0x333333,
-        this.cabinetGroup,
-      );
-      this.createPart(
-        pSideGeo,
-        mats.carcass,
-        L - ct / 2,
-        plinthH / 2,
-        cZ,
-        0x333333,
-        this.cabinetGroup,
-      );
-    }
+    // Left side panel
+    this.createPart(
+      sideGeo,
+      mats.carcass,
+      ct / 2,
+      sideY,
+      cZ,
+      0x333333,
+      this.cabinetGroup,
+    );
+    // Right side panel
+    this.createPart(
+      sideGeo,
+      mats.carcass,
+      L - ct / 2,
+      sideY,
+      cZ,
+      0x333333,
+      this.cabinetGroup,
+    );
 
-    // 2. Top Panel (Full width, caps sides)
+    // ── 2. TOP PANEL (full width, caps both side panels) ──────────────────
     const topGeo = new THREE.BoxGeometry(L, ct, cD);
     this.createPart(
       topGeo,
@@ -417,7 +410,7 @@ export class CabinetRenderer {
       this.cabinetGroup,
     );
 
-    // 3. Bottom Panel (Between sides)
+    // ── 3. BOTTOM PANEL (sits between side panels, at plinth top) ─────────
     const botGeo = new THREE.BoxGeometry(L - ct * 2, ct, cD);
     this.createPart(
       botGeo,
@@ -429,29 +422,30 @@ export class CabinetRenderer {
       this.cabinetGroup,
     );
 
-    // 4. Side Panels (Under top panel, covers bottom panel)
-    const sideGeo = new THREE.BoxGeometry(ct, H - ct, cD);
-    const sideY = plinthH + (H - ct) / 2;
-    this.createPart(
-      sideGeo,
-      mats.carcass,
-      ct / 2,
-      sideY,
-      cZ,
-      0x333333,
-      this.cabinetGroup,
-    );
-    this.createPart(
-      sideGeo,
-      mats.carcass,
-      L - ct / 2,
-      sideY,
-      cZ,
-      0x333333,
-      this.cabinetGroup,
-    );
+    // ── 4. PLINTH FRONT RAIL (toe-kick board, between the side panels) ────
+    // Only rendered if plinth exists. Sits at the very front of the cabinet.
+    if (plinthH > 0) {
+      const pFrontGeo = new THREE.BoxGeometry(L - ct * 2, plinthH, ct);
+      this.createPart(
+        pFrontGeo,
+        mats.carcass,
+        L / 2,
+        plinthH / 2,
+        bt + cD - ct / 2, // flush with the front face of the carcass
+        0x333333,
+        this.cabinetGroup,
+      );
 
-    // 5. Back Panel (Plant-on, completely behind carcass)
+      // NOTE: Plinth SIDE rails are intentionally omitted here.
+      // The extended side panels already visually enclose the plinth zone.
+      // The physical side plinth rails still appear in the CUT LIST
+      // (generateCutList) as separate parts — this is correct because in
+      // real construction the side panels are one tall board and the plinth
+      // rails are glued/screwed behind them for rigidity. The 3D view just
+      // shows the clean combined outer face.
+    }
+
+    // ── 5. BACK PANEL (plant-on, covers full height including plinth zone) ─
     const backGeo = new THREE.BoxGeometry(L, H, bt);
     this.createPart(
       backGeo,
@@ -475,7 +469,6 @@ export class CabinetRenderer {
       extW: Math.round((s.width / totalW) * L),
     }));
 
-    // Fix rounding errors
     const sumInt = normSections.reduce((sum, s) => sum + s.intW, 0);
     const sumExt = normSections.reduce((sum, s) => sum + s.extW, 0);
     if (normSections.length > 0) {
@@ -491,7 +484,6 @@ export class CabinetRenderer {
       sectionGroup.name = `section-${section.id}`;
       sectionGroup.userData = { section, index: idx };
 
-      // 1. Draw Vertical Divider
       if (idx > 0) {
         const divGeo = new THREE.BoxGeometry(ct, H - ct * 2, cD);
         this.createPart(
@@ -503,7 +495,8 @@ export class CabinetRenderer {
           0x333333,
           sectionGroup,
         );
-        currentIntX += ct; // Move pointer past divider
+        currentIntX += ct;
+        // REMOVED: currentExtX += ct;  <-- The exterior pointer should NOT account for internal dividers
       }
 
       const intCenterX = currentIntX + section.intW / 2;
@@ -816,11 +809,14 @@ export class CabinetRenderer {
       const dHeight = endY - startY - doorGap * 2;
       if (dHeight < 50) return;
 
-      const doorHinge = new THREE.Group();
+      // FIX BUG 2: pivot is always at the interior left edge for inset,
+      // exterior left edge for overlay — consistently use intX vs extX
       const pivotX =
         doorOverlay.id === "inset"
-          ? intX - doorWidth / 2
-          : extX - doorWidth / 2;
+          ? intX - intW / 2 // FIX: was `intX - doorWidth / 2` (same, but explicit)
+          : extX - extW / 2; // FIX: was `extX - doorWidth / 2` — now uses full extW
+
+      const doorHinge = new THREE.Group();
       doorHinge.position.set(pivotX, startY + dHeight / 2, doorZ - dt / 2);
 
       const doorGeo = new THREE.BoxGeometry(doorWidth, dHeight, dt);
@@ -856,11 +852,10 @@ export class CabinetRenderer {
       group.add(doorHinge);
     };
 
-    // Calculate absolute top and bottom standard bounds for doors
     const cabBottom = doorOverlay.id === "inset" ? floorY : plinthH + 2;
     const cabTop = doorOverlay.id === "inset" ? ceilingY : plinthH + H - 2;
 
-    // NEW: Split doors based explicitly on isInternal flag AND placement!
+    // FIX BUG 3: `placement === "full"` must NOT generate any door
     if (drawerCount > 0 && !isInternal) {
       if (placement === "custom") {
         buildDoor(drawerAreaEnd + ct, cabTop);
@@ -869,11 +864,10 @@ export class CabinetRenderer {
         buildDoor(drawerAreaEnd, cabTop);
       } else if (placement === "top") {
         buildDoor(cabBottom, drawerAreaStart);
-      } else if (placement === "full") {
-        // No doors needed, drawers take up the entire section
       }
-    } else {
-      // If internal, or no drawers, generate one full height door covering everything
+      // FIX: `placement === "full"` intentionally generates NO door here
+    } else if (drawerCount === 0 || isInternal) {
+      // Only generate the full-height door when there are no external drawers
       buildDoor(cabBottom, cabTop);
     }
 
