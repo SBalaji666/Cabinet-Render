@@ -128,7 +128,14 @@ export class CabinetRenderer {
   toggleDoors() {
     this.isDoorsOpen = !this.isDoorsOpen;
     this.doorHinges.forEach((door) => {
-      door.userData.targetY = this.isDoorsOpen ? -Math.PI / 2.0 : 0;
+      if (this.isDoorsOpen) {
+        // Left-swing opens at +90°, right-swing opens at -90°
+        door.userData.targetY = door.userData.isLeftSwing
+          ? Math.PI / 2.0
+          : -Math.PI / 2.0;
+      } else {
+        door.userData.targetY = 0;
+      }
     });
     this.updateDrawerPositions();
   }
@@ -485,16 +492,20 @@ export class CabinetRenderer {
       sectionGroup.userData = { section, index: idx };
 
       if (idx > 0) {
-        const divGeo = new THREE.BoxGeometry(ct, H - ct * 2, cD);
-        this.createPart(
-          divGeo,
-          this.materials.carcass,
-          currentIntX + ct / 2,
-          plinthH + H / 2,
-          bt + cD / 2,
-          0x333333,
-          sectionGroup,
-        );
+        // showDivider defaults to true; only skip geometry when explicitly false
+        const showDivider = section.showDivider !== false;
+        if (showDivider) {
+          const divGeo = new THREE.BoxGeometry(ct, H - ct * 2, cD);
+          this.createPart(
+            divGeo,
+            this.materials.carcass,
+            currentIntX + ct / 2,
+            plinthH + H / 2,
+            bt + cD / 2,
+            0x333333,
+            sectionGroup,
+          );
+        }
         currentIntX += ct;
         // REMOVED: currentExtX += ct;  <-- The exterior pointer should NOT account for internal dividers
       }
@@ -578,6 +589,7 @@ export class CabinetRenderer {
   ) {
     const { intX, intW, extX, extW } = bounds;
     const doorGap = 1;
+    const doorSwing = section.doorSwing || "right"; // NEW: "right" | "left"
 
     // Width logic (Inset vs Overlay)
     const doorWidth =
@@ -809,18 +821,28 @@ export class CabinetRenderer {
       const dHeight = endY - startY - doorGap * 2;
       if (dHeight < 50) return;
 
-      // FIX BUG 2: pivot is always at the interior left edge for inset,
-      // exterior left edge for overlay — consistently use intX vs extX
-      const pivotX =
-        doorOverlay.id === "inset"
-          ? intX - intW / 2 // FIX: was `intX - doorWidth / 2` (same, but explicit)
-          : extX - extW / 2; // FIX: was `extX - doorWidth / 2` — now uses full extW
+      // Pivot X: left edge for right-swing, right edge for left-swing
+      // For inset doors use interior X; for overlay use exterior X
+      const leftEdgeX =
+        doorOverlay.id === "inset" ? intX - intW / 2 : extX - extW / 2;
+      const rightEdgeX =
+        doorOverlay.id === "inset" ? intX + intW / 2 : extX + extW / 2;
+
+      const isLeftSwing = doorSwing === "left";
+      const pivotX = isLeftSwing ? rightEdgeX : leftEdgeX;
 
       const doorHinge = new THREE.Group();
       doorHinge.position.set(pivotX, startY + dHeight / 2, doorZ - dt / 2);
 
       const doorGeo = new THREE.BoxGeometry(doorWidth, dHeight, dt);
-      doorGeo.translate(doorWidth / 2, 0, dt / 2);
+
+      if (isLeftSwing) {
+        // Translate geometry so the RIGHT edge is at the pivot (opens leftward)
+        doorGeo.translate(-doorWidth / 2, 0, dt / 2);
+      } else {
+        // Translate geometry so the LEFT edge is at the pivot (opens rightward)
+        doorGeo.translate(doorWidth / 2, 0, dt / 2);
+      }
 
       const doorMat = this.materials.door.clone();
       doorMat.transparent = true;
@@ -844,10 +866,13 @@ export class CabinetRenderer {
         16,
       );
       const handle = new THREE.Mesh(handleGeo, this.materials.handle);
-      handle.position.set(doorWidth - 25, 0, dt + 15);
+      // Handle on the opposite side from the hinge
+      const handleOffsetX = isLeftSwing ? -(doorWidth - 25) : doorWidth - 25;
+      handle.position.set(handleOffsetX, 0, dt + 15);
       doorHinge.add(handle);
 
-      doorHinge.userData = { targetY: 0 };
+      // For left-swing: open angle is +90°; for right-swing: -90°
+      doorHinge.userData = { targetY: 0, isLeftSwing };
       this.doorHinges.push(doorHinge);
       group.add(doorHinge);
     };

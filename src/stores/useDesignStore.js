@@ -19,6 +19,8 @@ const DEFAULT_SECTION = (id, labelNum) => ({
   type: "closed",
   shelves: 2,
   drawers: { count: 0, height: 120, placement: "bottom" },
+  doorSwing: "right", // "right" | "left"
+  showDivider: true, // whether the vertical divider before this section is shown
 });
 
 export const useDesignStore = create((set, get) => ({

@@ -441,6 +441,96 @@ export default function ConfigPanel({
                   </label>
                 </div>
 
+                {/* Door Swing + Show Divider */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 8,
+                    marginBottom: 8,
+                  }}
+                >
+                  {s.type === "closed" && (
+                    <label style={{ fontSize: 10, color: ui.muted }}>
+                      Door Swing
+                      <select
+                        value={s.doorSwing || "right"}
+                        onChange={(e) =>
+                          updateSection({ ...s, doorSwing: e.target.value })
+                        }
+                        style={{
+                          ...inputStyle,
+                          padding: "5px 7px",
+                          fontSize: 11,
+                        }}
+                      >
+                        <option value="right">⬅ Right hinge</option>
+                        <option value="left">➡ Left hinge</option>
+                      </select>
+                    </label>
+                  )}
+
+                  {/* Show divider only makes sense from section 2 onwards */}
+                  {sections.indexOf(s) > 0 && (
+                    <label
+                      style={{
+                        fontSize: 10,
+                        color: ui.muted,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                      }}
+                    >
+                      Divider
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          marginTop: 5,
+                        }}
+                      >
+                        <div
+                          onClick={() =>
+                            updateSection({
+                              ...s,
+                              showDivider:
+                                s.showDivider === false ? true : false,
+                            })
+                          }
+                          style={{
+                            width: 32,
+                            height: 18,
+                            borderRadius: 9,
+                            background:
+                              s.showDivider === false ? ui.border : ui.accent,
+                            position: "relative",
+                            cursor: "pointer",
+                            transition: "background 0.2s",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 14,
+                              height: 14,
+                              borderRadius: "50%",
+                              background: "#fff",
+                              position: "absolute",
+                              top: 2,
+                              left: s.showDivider === false ? 2 : 16,
+                              transition: "left 0.2s",
+                            }}
+                          />
+                        </div>
+                        <span style={{ fontSize: 9 }}>
+                          {s.showDivider === false ? "Hidden" : "Visible"}
+                        </span>
+                      </div>
+                    </label>
+                  )}
+                </div>
+
                 {/* Shelves */}
                 <label
                   style={{
