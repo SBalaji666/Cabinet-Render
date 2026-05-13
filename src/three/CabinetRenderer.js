@@ -1,6 +1,11 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { DOOR_OVERLAY_TYPES } from "../data/constants.js"; // Ensure this import is available
+import { DOOR_OVERLAY_TYPES } from "../data/constants.js";
+import {
+  computeMergedSections,
+  countVisibleDividers,
+  resolveDoorWidths,
+} from "../utils/mergedSections.js";
 
 /**
  * Three.js Cabinet Renderer - Infurnia-style 3D Visualization
@@ -294,7 +299,7 @@ export class CabinetRenderer {
     const {
       overall,
       materials: matThickness,
-      sections,
+      sections: rawSections,
       hardware,
     } = this.config;
     const { length: L, height: H, depth: D } = overall;
@@ -306,6 +311,9 @@ export class CabinetRenderer {
       : 100;
     const doorOverlay =
       DOOR_OVERLAY_TYPES[hardware?.doorOverlay] || DOOR_OVERLAY_TYPES.full;
+
+    // Merge adjacent sections that share a hidden divider
+    const sections = computeMergedSections(rawSections);
 
     // Derived Depths mirroring cutlist logic
     const bumperGap = 1;
@@ -466,8 +474,11 @@ export class CabinetRenderer {
   }
 
   buildSections(sections, L, H, D, ct, bt, dt, plinthH, cD, doorOverlay) {
-    const dividerCount = sections.length - 1;
-    const totalInternalWidth = L - ct * 2 - dividerCount * ct;
+    // After merging, every section in this array has showDivider === true
+    // (except section[0] which never has a left divider).
+    // Use the actual visible-divider count for interior-width maths.
+    const visibleDividerCount = sections.length - 1; // all dividers are now real walls
+    const totalInternalWidth = L - ct * 2 - visibleDividerCount * ct;
     const totalW = sections.reduce((a, s) => a + s.width, 0) || 1;
 
     const normSections = sections.map((s) => ({
@@ -492,22 +503,18 @@ export class CabinetRenderer {
       sectionGroup.userData = { section, index: idx };
 
       if (idx > 0) {
-        // showDivider defaults to true; only skip geometry when explicitly false
-        const showDivider = section.showDivider !== false;
-        if (showDivider) {
-          const divGeo = new THREE.BoxGeometry(ct, H - ct * 2, cD);
-          this.createPart(
-            divGeo,
-            this.materials.carcass,
-            currentIntX + ct / 2,
-            plinthH + H / 2,
-            bt + cD / 2,
-            0x333333,
-            sectionGroup,
-          );
-        }
+        // Every divider at this level is a real physical wall
+        const divGeo = new THREE.BoxGeometry(ct, H - ct * 2, cD);
+        this.createPart(
+          divGeo,
+          this.materials.carcass,
+          currentIntX + ct / 2,
+          plinthH + H / 2,
+          bt + cD / 2,
+          0x333333,
+          sectionGroup,
+        );
         currentIntX += ct;
-        // REMOVED: currentExtX += ct;  <-- The exterior pointer should NOT account for internal dividers
       }
 
       const intCenterX = currentIntX + section.intW / 2;
@@ -589,18 +596,26 @@ export class CabinetRenderer {
   ) {
     const { intX, intW, extX, extW } = bounds;
     const doorGap = 1;
-    const doorSwing = section.doorSwing || "right"; // NEW: "right" | "left"
 
-    // Width logic (Inset vs Overlay)
-    const doorWidth =
-      doorOverlay.id === "inset" ? intW - doorGap * 2 : extW - doorGap * 2;
+    // Z depth of the door face (same for all doors in this section)
     const doorZ =
       doorOverlay.id === "inset" ? bt + cD - dt / 2 : bt + cD + 1 + dt / 2;
 
+    // Resolve per-door widths/offsets using the section's _doorConfig.
+    // For a double-door pair this returns two descriptors; for a single door,
+    // one descriptor spanning the full width.
+    const doorLeaves = resolveDoorWidths(
+      section,
+      intW,
+      extW,
+      doorOverlay,
+      doorGap,
+    );
+
     const drawerCount = section.drawers?.count || 0;
-    const drawerHeights = section.drawers?.heights || []; // NEW: Array of heights
+    const drawerHeights = section.drawers?.heights || [];
     const placement = section.drawers?.placement || "bottom";
-    const isInternal = section.drawers?.isInternal || false; // NEW: Explicit toggle
+    const isInternal = section.drawers?.isInternal || false;
 
     const floorY = plinthH + ct;
     const ceilingY = plinthH + H - ct;
@@ -612,7 +627,6 @@ export class CabinetRenderer {
 
     // ── 1. DRAWERS ────────────────────────────
     if (drawerCount > 0) {
-      // Calculate total height using the individual heights array
       const totalDrawerHeight = drawerHeights
         .slice(0, drawerCount)
         .reduce((sum, h) => sum + (h || 120), 0);
@@ -630,7 +644,6 @@ export class CabinetRenderer {
         const offsetMm =
           (ceilingY - floorY - ct * 2) *
           ((section.drawers?.customPercentage ?? 20) / 100);
-
         drawerAreaStart = isFromTop
           ? ceilingY - offsetMm - totalDrawerHeight - ct
           : floorY + offsetMm + ct;
@@ -640,16 +653,38 @@ export class CabinetRenderer {
         drawerAreaEnd = floorY + totalDrawerHeight;
       }
 
-      // Track the Y position progressively as we stack drawers of varying heights
+      // Use first door leaf width for drawer face — drawers always span full interior
+      const drawerFaceLeaf = doorLeaves[0];
+      const drawerFaceFullW =
+        doorOverlay.id === "inset"
+          ? intW - doorGap * 2 - (isInternal ? 4 : 0)
+          : isInternal
+            ? intW - doorGap * 2 - 4
+            : extW - doorGap * 2;
+      const drawerFaceX = isInternal
+        ? intX
+        : doorOverlay.id === "inset"
+          ? intX
+          : extX;
+
+      let drawerFaceZ = doorZ;
+      if (isInternal) {
+        const internalFrontZ =
+          doorOverlay.id === "inset" ? bt + cD - dt - 2 : bt + cD - 2;
+        drawerFaceZ = internalFrontZ - dt / 2;
+      }
+
+      const backPanelInsideZ = bt;
+      const frontOfDrawerBoxZ = drawerFaceZ - dt / 2;
+      const dBoxDepth = frontOfDrawerBoxZ - (backPanelInsideZ + 10);
+      const dBoxZ = frontOfDrawerBoxZ - dBoxDepth / 2;
+
       let currentDrawerY = drawerAreaStart;
 
       for (let i = 0; i < drawerCount; i++) {
-        // Read the specific height for this drawer
         const drawerHeight = drawerHeights[i] || 120;
-
-        // Calculate center Y for this specific drawer
         const drawerY = currentDrawerY + drawerHeight / 2;
-        currentDrawerY += drawerHeight; // Advance the pointer for the next drawer
+        currentDrawerY += drawerHeight;
 
         const drawerGroupTarget = new THREE.Group();
         drawerGroupTarget.userData = {
@@ -658,28 +693,12 @@ export class CabinetRenderer {
           isInternal,
         };
 
-        // Calculate proper Z depths for internal vs exposed drawer faces
-        let drawerFaceZ = doorZ;
-        if (isInternal) {
-          const internalFrontZ =
-            doorOverlay.id === "inset" ? bt + cD - dt - 2 : bt + cD - 2;
-          drawerFaceZ = internalFrontZ - dt / 2;
-        }
-
-        // ─── PERFECT DRAWER BOX MATH ───
-        const backPanelInsideZ = bt;
-        const frontOfDrawerBoxZ = drawerFaceZ - dt / 2;
-        const dBoxDepth = frontOfDrawerBoxZ - (backPanelInsideZ + 10);
-        const dBoxZ = frontOfDrawerBoxZ - dBoxDepth / 2;
-
         const boxWidth = intW - 50;
         const boxHeight = drawerHeight - 15;
         const sideT = 12;
 
-        // Left Side
-        const leftGeo = new THREE.BoxGeometry(sideT, boxHeight, dBoxDepth);
         this.createPart(
-          leftGeo,
+          new THREE.BoxGeometry(sideT, boxHeight, dBoxDepth),
           this.materials.drawerFace,
           intX - boxWidth / 2 + sideT / 2,
           drawerY,
@@ -687,11 +706,8 @@ export class CabinetRenderer {
           0x444444,
           drawerGroupTarget,
         );
-
-        // Right Side
-        const rightGeo = new THREE.BoxGeometry(sideT, boxHeight, dBoxDepth);
         this.createPart(
-          rightGeo,
+          new THREE.BoxGeometry(sideT, boxHeight, dBoxDepth),
           this.materials.drawerFace,
           intX + boxWidth / 2 - sideT / 2,
           drawerY,
@@ -699,15 +715,8 @@ export class CabinetRenderer {
           0x444444,
           drawerGroupTarget,
         );
-
-        // Front Side
-        const frontGeo = new THREE.BoxGeometry(
-          boxWidth - sideT * 2,
-          boxHeight,
-          sideT,
-        );
         this.createPart(
-          frontGeo,
+          new THREE.BoxGeometry(boxWidth - sideT * 2, boxHeight, sideT),
           this.materials.drawerFace,
           intX,
           drawerY,
@@ -715,15 +724,8 @@ export class CabinetRenderer {
           0x444444,
           drawerGroupTarget,
         );
-
-        // Back Side
-        const backGeo = new THREE.BoxGeometry(
-          boxWidth - sideT * 2,
-          boxHeight,
-          sideT,
-        );
         this.createPart(
-          backGeo,
+          new THREE.BoxGeometry(boxWidth - sideT * 2, boxHeight, sideT),
           this.materials.drawerFace,
           intX,
           drawerY,
@@ -731,15 +733,8 @@ export class CabinetRenderer {
           0x444444,
           drawerGroupTarget,
         );
-
-        // Bottom Panel
-        const bottomGeo = new THREE.BoxGeometry(
-          boxWidth - sideT * 2,
-          6,
-          dBoxDepth - sideT * 2,
-        );
         this.createPart(
-          bottomGeo,
+          new THREE.BoxGeometry(boxWidth - sideT * 2, 6, dBoxDepth - sideT * 2),
           this.materials.drawerFace,
           intX,
           drawerY - boxHeight / 2 + 3,
@@ -748,41 +743,31 @@ export class CabinetRenderer {
           drawerGroupTarget,
         );
 
-        // Drawer Face
-        const currentDoorWidth = isInternal
-          ? intW - doorGap * 2 - 4
-          : doorWidth;
-        const currentFaceX = isInternal
-          ? intX
-          : doorOverlay.id === "inset"
-            ? intX
-            : extX;
-
+        // Drawer face — always spans the full interior opening
         const dFaceGeo = new THREE.BoxGeometry(
-          currentDoorWidth,
+          drawerFaceFullW,
           drawerHeight - doorGap * 2,
           dt,
         );
         this.createPart(
           dFaceGeo,
           this.materials.door,
-          currentFaceX,
+          drawerFaceX,
           drawerY,
           drawerFaceZ,
           0x333333,
           drawerGroupTarget,
         );
 
-        // Handle
         const dHandleGeo = new THREE.CylinderGeometry(
           4,
           4,
-          currentDoorWidth * 0.45,
+          drawerFaceFullW * 0.45,
           16,
         ).rotateZ(Math.PI / 2);
         const handleMesh = new THREE.Mesh(dHandleGeo, this.materials.handle);
         handleMesh.position.set(
-          currentFaceX,
+          drawerFaceX,
           drawerY,
           drawerFaceZ + dt / 2 + 15,
         );
@@ -816,33 +801,41 @@ export class CabinetRenderer {
       );
     }
 
-    // ── 3. DOORS ────────────────────────────────────
-    const buildDoor = (startY, endY) => {
+    // ── 3. DOORS — per-leaf using resolveDoorWidths ────────────────────────
+    // buildOneDoor renders a single door leaf at a specific X position and width.
+    const buildOneDoor = (leaf, startY, endY) => {
       const dHeight = endY - startY - doorGap * 2;
       if (dHeight < 50) return;
 
-      // Pivot X: left edge for right-swing, right edge for left-swing
-      // For inset doors use interior X; for overlay use exterior X
-      const leftEdgeX =
-        doorOverlay.id === "inset" ? intX - intW / 2 : extX - extW / 2;
-      const rightEdgeX =
-        doorOverlay.id === "inset" ? intX + intW / 2 : extX + extW / 2;
+      const leafIntLeft = intX - intW / 2 + leaf._resolvedIntOffset;
+      const leafExtLeft = extX - extW / 2 + leaf._resolvedExtOffset;
+      const leafIntRight = leafIntLeft + leaf._resolvedIntW;
+      const leafExtRight = leafExtLeft + leaf._resolvedExtW;
 
-      const isLeftSwing = doorSwing === "left";
-      const pivotX = isLeftSwing ? rightEdgeX : leftEdgeX;
+      const isLeftSwing = leaf.swing === "left";
+
+      // Pivot at the hinge edge
+      const pivotX =
+        doorOverlay.id === "inset"
+          ? isLeftSwing
+            ? leafIntRight
+            : leafIntLeft
+          : isLeftSwing
+            ? leafExtRight
+            : leafExtLeft;
+
+      const leafDoorW = leaf._resolvedDoorW;
 
       const doorHinge = new THREE.Group();
       doorHinge.position.set(pivotX, startY + dHeight / 2, doorZ - dt / 2);
 
-      const doorGeo = new THREE.BoxGeometry(doorWidth, dHeight, dt);
-
-      if (isLeftSwing) {
-        // Translate geometry so the RIGHT edge is at the pivot (opens leftward)
-        doorGeo.translate(-doorWidth / 2, 0, dt / 2);
-      } else {
-        // Translate geometry so the LEFT edge is at the pivot (opens rightward)
-        doorGeo.translate(doorWidth / 2, 0, dt / 2);
-      }
+      const doorGeo = new THREE.BoxGeometry(leafDoorW, dHeight, dt);
+      // Translate so the hinge edge sits at x=0 in hinge-local space
+      doorGeo.translate(
+        isLeftSwing ? -leafDoorW / 2 : leafDoorW / 2,
+        0,
+        dt / 2,
+      );
 
       const doorMat = this.materials.door.clone();
       doorMat.transparent = true;
@@ -853,11 +846,12 @@ export class CabinetRenderer {
       doorHinge.add(doorMesh);
 
       const edges = new THREE.EdgesGeometry(doorGeo);
-      const lines = new THREE.LineSegments(
-        edges,
-        new THREE.LineBasicMaterial({ color: 0x333333, linewidth: 1.5 }),
+      doorHinge.add(
+        new THREE.LineSegments(
+          edges,
+          new THREE.LineBasicMaterial({ color: 0x333333, linewidth: 1.5 }),
+        ),
       );
-      doorHinge.add(lines);
 
       const handleGeo = new THREE.CylinderGeometry(
         5,
@@ -866,34 +860,34 @@ export class CabinetRenderer {
         16,
       );
       const handle = new THREE.Mesh(handleGeo, this.materials.handle);
-      // Handle on the opposite side from the hinge
-      const handleOffsetX = isLeftSwing ? -(doorWidth - 25) : doorWidth - 25;
+      const handleOffsetX = isLeftSwing ? -(leafDoorW - 25) : leafDoorW - 25;
       handle.position.set(handleOffsetX, 0, dt + 15);
       doorHinge.add(handle);
 
-      // For left-swing: open angle is +90°; for right-swing: -90°
       doorHinge.userData = { targetY: 0, isLeftSwing };
       this.doorHinges.push(doorHinge);
       group.add(doorHinge);
     };
 
+    // Emit all door leaves for a given vertical span
+    const buildDoorsForSpan = (startY, endY) => {
+      doorLeaves.forEach((leaf) => buildOneDoor(leaf, startY, endY));
+    };
+
     const cabBottom = doorOverlay.id === "inset" ? floorY : plinthH + 2;
     const cabTop = doorOverlay.id === "inset" ? ceilingY : plinthH + H - 2;
 
-    // FIX BUG 3: `placement === "full"` must NOT generate any door
     if (drawerCount > 0 && !isInternal) {
       if (placement === "custom") {
-        buildDoor(drawerAreaEnd + ct, cabTop);
-        buildDoor(cabBottom, drawerAreaStart - ct);
+        buildDoorsForSpan(drawerAreaEnd + ct, cabTop);
+        buildDoorsForSpan(cabBottom, drawerAreaStart - ct);
       } else if (placement === "bottom") {
-        buildDoor(drawerAreaEnd, cabTop);
+        buildDoorsForSpan(drawerAreaEnd, cabTop);
       } else if (placement === "top") {
-        buildDoor(cabBottom, drawerAreaStart);
+        buildDoorsForSpan(cabBottom, drawerAreaStart);
       }
-      // FIX: `placement === "full"` intentionally generates NO door here
     } else if (drawerCount === 0 || isInternal) {
-      // Only generate the full-height door when there are no external drawers
-      buildDoor(cabBottom, cabTop);
+      buildDoorsForSpan(cabBottom, cabTop);
     }
 
     // ── 4. SHELVES ────────────────────────────────────

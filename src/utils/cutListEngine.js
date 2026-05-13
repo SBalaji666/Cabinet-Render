@@ -7,6 +7,11 @@ import {
   CONSTRUCTION_TYPES,
   DOOR_OVERLAY_TYPES,
 } from "../data/constants.js";
+import {
+  computeMergedSections,
+  countVisibleDividers,
+  resolveDoorWidths,
+} from "./mergedSections.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -37,8 +42,11 @@ function hingeLayout(doorHeight, hingeFn) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function validateConfig(config) {
-  const { overall, materials, sections, hardware } = config;
+  const { overall, materials, sections: rawSections, hardware } = config;
   const warnings = [];
+
+  // Validate against the MERGED view — that is what gets built
+  const sections = computeMergedSections(rawSections);
 
   const slide = DRAWER_SLIDES[hardware.drawerSlide];
   const plinth = PLINTH_SYSTEMS[hardware.plinth] || PLINTH_SYSTEMS.none;
@@ -117,7 +125,13 @@ export function validateConfig(config) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function generateCutList(config) {
-  const { overall, materials, tolerances, sections, hardware } = config;
+  const {
+    overall,
+    materials,
+    tolerances,
+    sections: rawSections,
+    hardware,
+  } = config;
   const { length: L, height: H, depth: D } = overall;
   const {
     carcass: ct,
@@ -142,12 +156,17 @@ export function generateCutList(config) {
   let partNum = 1;
   const add = (part) => parts.push({ ...part, id: partNum++ });
 
+  // ── Merge adjacent sections that share a hidden divider ───────────────────
+  // All part dimensions, counts, and spacing are calculated from the MERGED
+  // layout so the cut list always matches exactly what gets built.
+  const sections = computeMergedSections(rawSections);
+  const dividerCount = sections.length - 1; // only real (visible) dividers
+
   // ── HEIGHT & DEPTH CALCULATIONS ──
   // Plinth is extra. The cabinet box itself is exactly H.
   const plinthHeight = plinth.height;
   const boxHeight = H;
   const internalHeight = boxHeight - ct * 2;
-  const dividerCount = sections.length - 1;
 
   // Carcass Depth (Overall Depth minus back, door, and a 1mm bumper gap)
   const bumperGap = 1;
@@ -255,7 +274,7 @@ export function generateCutList(config) {
       thickness: ct,
       grain: "height",
       edgeBand: "front edge",
-      note: `${dividerCount} internal dividers — Sits on bottom panel`,
+      note: `${dividerCount} physical divider${dividerCount !== 1 ? "s" : ""} — hidden dividers are merged; only structural walls listed`,
       machining: joinery.requiresBoring
         ? `Boring for ${joinery.name}`
         : joinery.id === "dado"
@@ -301,35 +320,53 @@ export function generateCutList(config) {
       const placement = section.drawers?.placement || "bottom";
       const isInternal = section.drawers?.isInternal || false;
 
-      const doorWidth =
-        doorOverlay.id === "inset"
-          ? interiorWidth - gapPerSide * 2
-          : sw - gapPerSide * dg;
+      // Resolve individual door leaves — handles single door, double-door pair,
+      // and any multi-section merge with independent door widths.
+      const doorLeaves = resolveDoorWidths(
+        section,
+        interiorWidth,
+        sw,
+        doorOverlay,
+        gapPerSide,
+      );
 
-      // ── Helper: add a door at a given height ──────────────────────────────
-      const addDoor = (doorHeight, label) => {
+      // ── Helper: add one door leaf at a given height ──────────────────────
+      const addDoorLeaf = (leaf, doorHeight, label) => {
+        const leafDoorW = leaf._resolvedDoorW;
+        if (leafDoorW < 10 || doorHeight < 50) return;
+
         const { count: hingeCount } = hingeLayout(
           doorHeight,
           hinge.hingesPerDoor,
         );
+        const pairNote = leaf.isDouble
+          ? ` | Double-door pair — ${leaf.label} leaf (${leaf.swing}-swing)`
+          : leaf.isSingleOverride
+            ? ` | Single shared door`
+            : "";
+
         add({
           part: "Door Panel",
           section: section.label,
           material: `Door ${dt}mm`,
           qty: 1,
           length: Math.round(doorHeight),
-          width: Math.round(doorWidth),
+          width: Math.round(leafDoorW),
           thickness: dt,
           grain: "height",
           edgeBand: "all 4 edges",
-          note: `${section.label} — ${label}. Pre-band: ${Math.round(doorHeight)}×${Math.round(doorWidth)} mm. Post-band: ${Math.round(doorHeight + ebt * 2)}×${Math.round(doorWidth + ebt * 2)} mm`,
+          note: `${leaf.label} — ${label}.${pairNote} Pre-band: ${Math.round(doorHeight)}×${Math.round(leafDoorW)} mm. Post-band: ${Math.round(doorHeight + ebt * 2)}×${Math.round(leafDoorW + ebt * 2)} mm`,
           machining: `Hinge cup: ⌀${hinge.cupDiameter} mm × ${hinge.cupDepth} mm deep, ${hinge.boringDistance} mm from hinge edge. 100 mm from top/bottom (Blum std).`,
           hardware: `${hinge.brand} ${hinge.model} × ${hingeCount} pcs`,
         });
       };
 
-      // ── CASE 1: Internal drawers → full-height door always ────────────────
-      // The door conceals the internal drawers, so it spans the full opening.
+      // addDoor emits all leaves for a given span height
+      const addDoor = (doorHeight, label) => {
+        doorLeaves.forEach((leaf) => addDoorLeaf(leaf, doorHeight, label));
+      };
+
+      // ── CASE 1: Internal drawers → full-height door always ───────────────
       if (isInternal && drawerCount > 0) {
         const doorHeight =
           doorOverlay.id === "inset"
@@ -341,7 +378,7 @@ export function generateCutList(config) {
         );
       }
 
-      // ── CASE 2: External drawers — placement determines split ─────────────
+      // ── CASE 2: External drawers — placement determines split ────────────
       else if (!isInternal && drawerCount > 0) {
         const drawerHeights = section.drawers?.heights || [];
         const totalDrawerStack = drawerHeights
@@ -350,9 +387,7 @@ export function generateCutList(config) {
 
         if (placement === "full") {
           // No door — drawers fill entire section front
-          // (no addDoor call)
         } else if (placement === "bottom") {
-          // Door above the drawer bank
           const doorHeight =
             doorOverlay.id === "inset"
               ? internalHeight - totalDrawerStack - gapPerSide * 2
@@ -361,7 +396,6 @@ export function generateCutList(config) {
             addDoor(doorHeight, `${doorOverlay.name} door above drawer bank`);
           }
         } else if (placement === "top") {
-          // Door below the drawer bank
           const doorHeight =
             doorOverlay.id === "inset"
               ? internalHeight - totalDrawerStack - gapPerSide * 2
@@ -370,21 +404,12 @@ export function generateCutList(config) {
             addDoor(doorHeight, `${doorOverlay.name} door below drawer bank`);
           }
         } else if (placement === "custom") {
-          // Two doors: one above and one below the floating drawer bank.
-          // Mirror the exact offset calculation used in buildClosedSection (3D renderer)
-          // so cut-list dimensions match what is rendered.
-
           const isFromTop = section.drawers?.customFrom === "top";
           const percentage = (section.drawers?.customPercentage ?? 20) / 100;
-
-          // availableH = internal height minus the drawer stack and the two
-          // structural dividers (ct each) that sandwich the drawer bank.
           const availableH = internalHeight - totalDrawerStack - ct * 2;
           let offsetMm = Math.round(availableH * percentage);
-          // clamp so offset never goes negative or overflows
           offsetMm = Math.max(0, Math.min(offsetMm, availableH));
 
-          // Split the remaining cavity above / below the drawer bank
           let topCavityH, bottomCavityH;
           if (isFromTop) {
             topCavityH = offsetMm;
@@ -394,10 +419,6 @@ export function generateCutList(config) {
             topCavityH = availableH - bottomCavityH;
           }
 
-          // For overlay doors the door panel must cover the structural divider
-          // on the side that abuts the carcass top/bottom panel.
-          // coversTop=true  → add ct to height (door overlaps top panel)
-          // coversBot=true  → add ct to height (door overlaps bottom panel)
           const calcCustomDoorHeight = (cavityH, coversTop, coversBot) => {
             let h = cavityH;
             if (doorOverlay.id !== "inset") {
@@ -407,11 +428,9 @@ export function generateCutList(config) {
             return h - gapPerSide * 2;
           };
 
-          // Top door sits between the cabinet top panel and the upper divider
           const topDoorH = calcCustomDoorHeight(topCavityH, true, false);
           addDoor(topDoorH, `${doorOverlay.name} top door (above drawer bank)`);
 
-          // Bottom door sits between the lower divider and the cabinet bottom panel
           const bottomDoorH = calcCustomDoorHeight(bottomCavityH, false, true);
           addDoor(
             bottomDoorH,
@@ -420,7 +439,7 @@ export function generateCutList(config) {
         }
       }
 
-      // ── CASE 3: No drawers → standard full-height door ────────────────────
+      // ── CASE 3: No drawers → standard full-height door ───────────────────
       else {
         const doorHeight =
           doorOverlay.id === "inset"
@@ -564,7 +583,9 @@ export function generateCutList(config) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function generateHardwareSchedule(config, cutList = []) {
-  const { sections, hardware, construction } = config;
+  const { sections: rawSections, hardware, construction } = config;
+  // Use merged view so hardware counts match the actual structure
+  const sections = computeMergedSections(rawSections);
   const schedule = [];
 
   const hinge = HINGES[hardware.hinge];
@@ -635,8 +656,8 @@ export function generateHardwareSchedule(config, cutList = []) {
 
   // Cam locks
   if (construction?.requiresCamLocks) {
-    const dividerCount = sections.length - 1;
-    const camQty = (4 + dividerCount * 2) * 2;
+    const visibleDividerCount = sections.length - 1; // merged sections only have real dividers
+    const camQty = (4 + visibleDividerCount * 2) * 2;
     schedule.push({
       category: "Cam Locks (RTA)",
       item: "Minifix / Rafix 15 mm cam lock",
