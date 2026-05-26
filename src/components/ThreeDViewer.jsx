@@ -1,7 +1,17 @@
 import React, { useEffect, useRef, useState } from "react";
 import { CabinetRenderer } from "../three/CabinetRenderer.js";
+import PanelColorPicker from "./PanelColorPicker.jsx";
 
-export default function ThreeDViewer({ config, onSectionSelect, ui }) {
+export default function ThreeDViewer({
+  config,
+  onSectionSelect,
+  ui,
+  panelColors,
+  selectedPanel,
+  onPanelSelect,
+  onPanelColorChange,
+  onPanelColorReset,
+}) {
   const containerRef = useRef(null);
   const rendererRef = useRef(null);
   const [viewMode, setViewMode] = useState("perspective");
@@ -27,11 +37,26 @@ export default function ThreeDViewer({ config, onSectionSelect, ui }) {
       handleSectionSelect,
     );
 
+    // Listen for panel selection events
+    const handlePanelSelect = (event) => {
+      if (onPanelSelect) {
+        onPanelSelect(event.detail);
+      }
+    };
+    containerRef.current.addEventListener(
+      "panelselected",
+      handlePanelSelect,
+    );
+
     return () => {
       if (containerRef.current) {
         containerRef.current.removeEventListener(
           "sectionselected",
           handleSectionSelect,
+        );
+        containerRef.current.removeEventListener(
+          "panelselected",
+          handlePanelSelect,
         );
       }
       if (rendererRef.current) {
@@ -54,6 +79,13 @@ export default function ThreeDViewer({ config, onSectionSelect, ui }) {
       rendererRef.current.setExploded(exploded);
     }
   }, [exploded]);
+
+  // NEW: Apply panel colors when they change
+  useEffect(() => {
+    if (rendererRef.current && panelColors) {
+      rendererRef.current.applyPanelColors(panelColors);
+    }
+  }, [panelColors]);
 
   const handleViewChange = (mode) => {
     setViewMode(mode);
@@ -329,6 +361,18 @@ export default function ThreeDViewer({ config, onSectionSelect, ui }) {
             joinery
           </div>
         </div>
+      )}
+
+      {/* Panel Color Picker Overlay */}
+      {selectedPanel && (
+        <PanelColorPicker
+          panelInfo={selectedPanel}
+          currentColor={panelColors?.[selectedPanel.panelId] || null}
+          onColorChange={onPanelColorChange}
+          onReset={onPanelColorReset}
+          onClose={() => onPanelSelect(null)}
+          ui={ui}
+        />
       )}
     </div>
   );

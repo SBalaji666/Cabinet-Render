@@ -131,6 +131,7 @@ export function generateCutList(config) {
     tolerances,
     sections: rawSections,
     hardware,
+    panelColors,
   } = config;
   const { length: L, height: H, depth: D } = overall;
   const {
@@ -154,7 +155,15 @@ export function generateCutList(config) {
 
   const parts = [];
   let partNum = 1;
-  const add = (part) => parts.push({ ...part, id: partNum++ });
+  const pc = panelColors || {};
+  const add = (part) => {
+    const entry = { ...part, id: partNum++ };
+    // Auto-inject panel color if a panelId is provided and a color is set
+    if (entry.panelId && pc[entry.panelId]) {
+      entry.color = pc[entry.panelId];
+    }
+    parts.push(entry);
+  };
 
   // ── Merge adjacent sections that share a hidden divider ───────────────────
   // All part dimensions, counts, and spacing are calculated from the MERGED
@@ -186,6 +195,7 @@ export function generateCutList(config) {
       grain: "length",
       edgeBand: "top edge",
       note: `${plinthHeight} mm toe-kick rail, ${plinth.setback} mm setback. Sits between side panels.`,
+      panelId: "plinth-front",
     });
 
     // Plinth side rails intentionally omitted.
@@ -209,6 +219,7 @@ export function generateCutList(config) {
     machining: joinery.requiresBoring
       ? "Dowel/cam holes on underside at joint positions"
       : "None",
+    panelId: "top-panel",
   });
 
   add({
@@ -225,6 +236,7 @@ export function generateCutList(config) {
     machining: joinery.requiresBoring
       ? "Dowel/cam holes on topside at joint positions"
       : "None",
+    panelId: "bottom-panel",
   });
 
   const fullSideHeight = plinthHeight + boxHeight - ct;
@@ -246,6 +258,7 @@ export function generateCutList(config) {
           : joinery.requiresBoring
             ? `Boring for ${joinery.name}`
             : "None",
+      panelId: side === "Left Side Panel" ? "left-side" : "right-side",
     });
   });
 
@@ -260,6 +273,7 @@ export function generateCutList(config) {
     grain: "height",
     edgeBand: "none",
     note: "Plant-on back — fits flush over entire outside rear of carcass box",
+    panelId: "back-panel",
   });
 
   // ── 3. VERTICAL DIVIDERS ──
@@ -280,6 +294,7 @@ export function generateCutList(config) {
         : joinery.id === "dado"
           ? "Sits in dado groove"
           : "Butt joint — glue & screw",
+      // Note: divider panelIds are section-specific, handled below in section parts
     });
   }
 

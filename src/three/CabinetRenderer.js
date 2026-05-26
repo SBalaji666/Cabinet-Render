@@ -29,7 +29,9 @@ export class CabinetRenderer {
     this.cabinetGroup = null;
     this.selectedSection = null;
     this.hoveredSection = null;
+    this.selectedPanel = null;
     this.dimensionLines = [];
+    this.panelColorMap = {};
 
     // Animation states
     this.isDoorsOpen = false;
@@ -290,11 +292,13 @@ export class CabinetRenderer {
     this.isDoorsOpen = false;
     this.selectedSection = null;
     this.hoveredSection = null;
+    this.selectedPanel = null;
     if (this.toggleButton) this.toggleButton.innerText = "Open Doors & Drawers";
 
     this.cabinetGroup = new THREE.Group();
     this.cabinetGroup.name = "cabinet";
     this.materials = this.createMaterials();
+    this._doorCounter = 0;
 
     const {
       overall,
@@ -339,6 +343,10 @@ export class CabinetRenderer {
 
     this.setupObjectMetadata();
     this.scene.add(this.cabinetGroup);
+    // Reapply any saved panel colors after rebuild
+    if (Object.keys(this.panelColorMap).length > 0) {
+      this.applyPanelColors(this.panelColorMap);
+    }
     this.centerCamera(L, H + plinthH, D);
   }
 
@@ -365,11 +373,16 @@ export class CabinetRenderer {
     });
   }
 
-  createPart(geo, mat, x, y, z, edgeColor, group) {
+  createPart(geo, mat, x, y, z, edgeColor, group, panelMeta) {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(x, y, z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+    if (panelMeta) {
+      mesh.userData.panelId = panelMeta.panelId;
+      mesh.userData.panelType = panelMeta.panelType;
+      mesh.userData.panelLabel = panelMeta.panelLabel || panelMeta.panelId;
+    }
     group.add(mesh);
 
     const edges = new THREE.EdgesGeometry(geo);
@@ -401,6 +414,7 @@ export class CabinetRenderer {
       cZ,
       0x333333,
       this.cabinetGroup,
+      { panelId: "left-side", panelType: "carcass", panelLabel: "Left Side Panel" },
     );
     // Right side panel
     this.createPart(
@@ -411,6 +425,7 @@ export class CabinetRenderer {
       cZ,
       0x333333,
       this.cabinetGroup,
+      { panelId: "right-side", panelType: "carcass", panelLabel: "Right Side Panel" },
     );
 
     // ── 2. TOP PANEL (full width, caps both side panels) ──────────────────
@@ -423,6 +438,7 @@ export class CabinetRenderer {
       cZ,
       0x555555,
       this.cabinetGroup,
+      { panelId: "top-panel", panelType: "carcass", panelLabel: "Top Panel" },
     );
 
     // ── 3. BOTTOM PANEL (sits between side panels, at plinth top) ─────────
@@ -435,6 +451,7 @@ export class CabinetRenderer {
       cZ,
       0x333333,
       this.cabinetGroup,
+      { panelId: "bottom-panel", panelType: "carcass", panelLabel: "Bottom Panel" },
     );
 
     // ── 4. PLINTH FRONT RAIL (toe-kick board, between the side panels) ────
@@ -449,6 +466,7 @@ export class CabinetRenderer {
         bt + cD - ct / 2, // flush with the front face of the carcass
         0x333333,
         this.cabinetGroup,
+        { panelId: "plinth-front", panelType: "carcass", panelLabel: "Plinth Front Rail" },
       );
 
       // NOTE: Plinth SIDE rails are intentionally omitted here.
@@ -470,6 +488,7 @@ export class CabinetRenderer {
       bt / 2,
       0x666666,
       this.cabinetGroup,
+      { panelId: "back-panel", panelType: "back", panelLabel: "Back Panel" },
     );
   }
 
@@ -513,6 +532,7 @@ export class CabinetRenderer {
           bt + cD / 2,
           0x333333,
           sectionGroup,
+          { panelId: `section-${section.id}-divider`, panelType: "carcass", panelLabel: `${section.label} Divider` },
         );
         currentIntX += ct;
       }
@@ -577,6 +597,7 @@ export class CabinetRenderer {
           bt + (cD - 10) / 2,
           0x555555,
           group,
+          { panelId: `section-${section.id}-shelf-${i}`, panelType: "shelf", panelLabel: `${section.label} Shelf ${i + 1}` },
         );
       }
     }
@@ -757,6 +778,7 @@ export class CabinetRenderer {
           drawerFaceZ,
           0x333333,
           drawerGroupTarget,
+          { panelId: `section-${section.id}-drawer-${i}-face`, panelType: "drawerFace", panelLabel: `${section.label} Drawer ${i + 1} Face` },
         );
 
         const dHandleGeo = new THREE.CylinderGeometry(
@@ -843,6 +865,11 @@ export class CabinetRenderer {
 
       const doorMesh = new THREE.Mesh(doorGeo, doorMat);
       doorMesh.castShadow = true;
+      // Tag the door mesh with a unique panelId
+      const doorIdx = this._doorCounter++;
+      doorMesh.userData.panelId = `section-${section.id}-door-${doorIdx}`;
+      doorMesh.userData.panelType = "door";
+      doorMesh.userData.panelLabel = `${section.label} Door ${leaf.label || (doorIdx + 1)}`;
       doorHinge.add(doorMesh);
 
       const edges = new THREE.EdgesGeometry(doorGeo);
@@ -904,6 +931,7 @@ export class CabinetRenderer {
       }
 
       let remainingShelves = shelfCount;
+      let shelfIdx = 0;
       const totalCavityHeight = cavities.reduce(
         (sum, c) => sum + (c.end - c.start),
         0,
@@ -929,7 +957,9 @@ export class CabinetRenderer {
             bt + (cD - 10) / 2,
             0x555555,
             group,
+            { panelId: `section-${section.id}-cshelf-${shelfIdx}`, panelType: "shelf", panelLabel: `${section.label} Shelf ${shelfIdx + 1}` },
           );
+          shelfIdx++;
         }
       });
     }
@@ -1112,6 +1142,16 @@ export class CabinetRenderer {
           obj.material = this.materials.hover;
       });
     }
+
+    // Panel-level selection glow — overrides section highlighting for the single mesh
+    if (this.selectedPanel && this.selectedPanel.isMesh) {
+      const panelHighlight = this.materials.highlight.clone();
+      panelHighlight.emissive.set(0x00aaff);
+      panelHighlight.emissiveIntensity = 0.5;
+      panelHighlight.opacity = 0.85;
+      panelHighlight.transparent = true;
+      this.selectedPanel.material = panelHighlight;
+    }
   }
 
   onMouseMove(event) {
@@ -1147,22 +1187,66 @@ export class CabinetRenderer {
   }
 
   onClick(event) {
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+    const intersects = this.raycaster.intersectObjects(
+      this.cabinetGroup.children,
+      true,
+    );
+
+    // Find the first mesh with a panelId
+    let clickedPanel = null;
+    if (intersects.length > 0) {
+      for (const hit of intersects) {
+        if (hit.object.isMesh && hit.object.userData.panelId) {
+          clickedPanel = hit.object;
+          break;
+        }
+      }
+    }
+
+    // Toggle panel selection
+    if (clickedPanel) {
+      this.selectedPanel =
+        this.selectedPanel === clickedPanel ? null : clickedPanel;
+    } else {
+      this.selectedPanel = null;
+    }
+
+    // Also maintain section-level selection for ConfigPanel sync
     if (this.hoveredSection) {
       this.selectedSection =
         this.selectedSection === this.hoveredSection
           ? null
           : this.hoveredSection;
-      this.updateHighlighting();
-      this.container.dispatchEvent(
-        new CustomEvent("sectionselected", {
-          detail: {
-            section: this.selectedSection
-              ? this.selectedSection.userData.section
-              : null,
-          },
-        }),
-      );
+    } else {
+      this.selectedSection = null;
     }
+
+    this.updateHighlighting();
+
+    // Dispatch panel-level event
+    this.container.dispatchEvent(
+      new CustomEvent("panelselected", {
+        detail: this.selectedPanel
+          ? {
+              panelId: this.selectedPanel.userData.panelId,
+              panelType: this.selectedPanel.userData.panelType,
+              panelLabel: this.selectedPanel.userData.panelLabel,
+            }
+          : null,
+      }),
+    );
+
+    // Dispatch section-level event (existing behavior)
+    this.container.dispatchEvent(
+      new CustomEvent("sectionselected", {
+        detail: {
+          section: this.selectedSection
+            ? this.selectedSection.userData.section
+            : null,
+        },
+      }),
+    );
   }
 
   onKeyDown(event) {
@@ -1216,6 +1300,37 @@ export class CabinetRenderer {
   updateConfig(newConfig) {
     this.config = newConfig;
     this.buildCabinet();
+  }
+
+  /**
+   * Apply per-panel colors from a map of { panelId: hexColor }.
+   * Clones materials so each panel can have an independent color.
+   */
+  applyPanelColors(colorMap) {
+    this.panelColorMap = colorMap || {};
+    if (!this.cabinetGroup) return;
+
+    this.cabinetGroup.traverse((obj) => {
+      if (!obj.isMesh || !obj.userData.panelId) return;
+
+      const color = colorMap[obj.userData.panelId];
+      if (color) {
+        // Clone material so panels have independent colors
+        if (!obj.userData.hasCustomColor) {
+          obj.material = obj.material.clone();
+          obj.userData.hasCustomColor = true;
+        }
+        obj.material.color.set(color);
+        // Update originalMaterial so highlighting can restore the custom color
+        obj.userData.originalMaterial = obj.material;
+      } else if (obj.userData.hasCustomColor) {
+        // Reset to default material type
+        const defaultMat = this.materials[obj.userData.panelType] || this.materials.carcass;
+        obj.material = defaultMat.clone();
+        obj.userData.hasCustomColor = false;
+        obj.userData.originalMaterial = obj.material;
+      }
+    });
   }
 
   animate() {

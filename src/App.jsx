@@ -83,6 +83,10 @@ export default function App({
   );
   const [mainTab, setMainTab] = useState("3d-view");
   const [selectedSection, setSelectedSection] = useState(null);
+  const [selectedPanel, setSelectedPanel] = useState(null);
+  const [panelColors, setPanelColors] = useState(
+    preloadedConfig?.panelColors ?? {},
+  );
 
   // ── Save modal state ──────────────────────────────────────────────────────
   const [saveModalOpen, setSaveModalOpen] = useState(false);
@@ -97,8 +101,8 @@ export default function App({
 
   // ── Config + computed outputs ─────────────────────────────────────────────
   const config = useMemo(
-    () => ({ overall, materials, tolerances, sections, hardware }),
-    [overall, materials, tolerances, sections, hardware],
+    () => ({ overall, materials, tolerances, sections, hardware, panelColors }),
+    [overall, materials, tolerances, sections, hardware, panelColors],
   );
 
   const warnings = useMemo(() => validateConfig(config), [config]);
@@ -150,6 +154,7 @@ export default function App({
       tolerances,
       hardware,
       sections,
+      panelColors,
       themeKey,
     });
 
@@ -180,6 +185,7 @@ export default function App({
       "Edge Band",
       "Machining",
       "Hardware",
+      "Color",
       "Notes",
     ];
     const rows = cutList
@@ -204,6 +210,7 @@ export default function App({
         p.edgeBand,
         p.machining || "",
         p.hardware || "",
+        p.color || "",
         p.note,
       ]);
     const csv = [headers, ...rows]
@@ -315,6 +322,23 @@ export default function App({
     setSelectedSection(section);
     const el = document.getElementById(`section-${section?.id}`);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  // ── Panel color handlers ──────────────────────────────────────────────────
+  const handlePanelSelect = (panelInfo) => {
+    setSelectedPanel(panelInfo);
+  };
+
+  const handlePanelColorChange = (panelId, color) => {
+    setPanelColors((prev) => ({ ...prev, [panelId]: color }));
+  };
+
+  const handlePanelColorReset = (panelId) => {
+    setPanelColors((prev) => {
+      const next = { ...prev };
+      delete next[panelId];
+      return next;
+    });
   };
 
   const containerBg =
@@ -673,6 +697,11 @@ export default function App({
               config={config}
               onSectionSelect={handleSectionSelect}
               ui={ui}
+              panelColors={panelColors}
+              selectedPanel={selectedPanel}
+              onPanelSelect={handlePanelSelect}
+              onPanelColorChange={handlePanelColorChange}
+              onPanelColorReset={handlePanelColorReset}
             />
           )}
           {mainTab === "cutlist" && (
