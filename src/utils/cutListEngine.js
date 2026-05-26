@@ -52,7 +52,7 @@ export function validateConfig(config) {
   const plinth = PLINTH_SYSTEMS[hardware.plinth] || PLINTH_SYSTEMS.none;
   const ct = materials.carcass;
 
-  // Box height is exactly the configured height (plinth is extra, not subtracted)
+  // Box height is exactly the configured height (skirt is extra, not subtracted)
   const boxHeight = overall.height;
 
   if (overall.depth < 200)
@@ -121,7 +121,7 @@ export function validateConfig(config) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN CUT LIST GENERATOR (Top-Capped, Plant-On Back, Plinth Separated)
+// MAIN CUT LIST GENERATOR (Top-Capped, Plant-On Back, Skirt Separated)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function generateCutList(config) {
@@ -163,7 +163,7 @@ export function generateCutList(config) {
   const dividerCount = sections.length - 1; // only real (visible) dividers
 
   // ── HEIGHT & DEPTH CALCULATIONS ──
-  // Plinth is extra. The cabinet box itself is exactly H.
+  // Skirt is extra. The cabinet box itself is exactly H.
   const plinthHeight = plinth.height;
   const boxHeight = H;
   const internalHeight = boxHeight - ct * 2;
@@ -173,10 +173,10 @@ export function generateCutList(config) {
   const carcassDepth =
     doorOverlay.id !== "inset" ? D - bt - dt - bumperGap : D - bt;
 
-  // ── 1. PLINTH ──
+  // ── 1. SKIRT ──
   if (plinthHeight > 0) {
     add({
-      part: "Plinth Front Rail",
+      part: "Skirt Front Rail",
       section: "Base",
       material: `Carcass ${ct}mm`,
       qty: 1,
@@ -188,8 +188,8 @@ export function generateCutList(config) {
       note: `${plinthHeight} mm toe-kick rail, ${plinth.setback} mm setback. Sits between side panels.`,
     });
 
-    // Plinth side rails intentionally omitted.
-    // The full-height side panels (below) enclose the plinth zone completely.
+    // Skirt side rails intentionally omitted.
+    // The full-height side panels (below) enclose the skirt zone completely.
   }
 
   // ── 2. CARCASS ──
@@ -221,7 +221,7 @@ export function generateCutList(config) {
     thickness: ct,
     grain: "length",
     edgeBand: "front edge",
-    note: "Sits between side panels, at top of plinth zone",
+    note: "Sits between side panels, at top of skirt zone",
     machining: joinery.requiresBoring
       ? "Dowel/cam holes on topside at joint positions"
       : "None",
@@ -234,12 +234,12 @@ export function generateCutList(config) {
       section: "Carcass",
       material: `Carcass ${ct}mm`,
       qty: 1,
-      length: fullSideHeight, // FIX: was `boxHeight - ct`, now includes plinth
+      length: fullSideHeight, // includes skirt zone
       width: carcassDepth,
       thickness: ct,
       grain: "height",
       edgeBand: "front edge",
-      note: `${side} — full height including plinth zone (${plinthHeight} mm plinth + ${boxHeight - ct} mm box). Sits under top panel.`,
+      note: `${side} — full height including skirt zone (${plinthHeight} mm skirt + ${boxHeight - ct} mm box). Sits under top panel.`,
       machining:
         joinery.id === "dado"
           ? "Dado grooves for dividers & fixed shelves"

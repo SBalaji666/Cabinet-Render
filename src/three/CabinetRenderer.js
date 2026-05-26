@@ -386,8 +386,8 @@ export class CabinetRenderer {
     const mats = this.materials;
     const cZ = bt + cD / 2; // Z-centre of carcass depth
 
-    // ── 1. SIDE PANELS (full height: plinth + box, floor to top) ──────────
-    // Height = plinthH + H - ct  (sits under the top panel, starts from floor)
+    // ── 1. SIDE PANELS (full height: skirt + box, floor to top) ──────────
+    // Height = plinthH + H - ct  (skirt height + box, sits under top panel)
     const fullSideH = plinthH + H - ct;
     const sideGeo = new THREE.BoxGeometry(ct, fullSideH, cD);
     const sideY = fullSideH / 2; // centred from y=0 up to plinthH+H-ct
@@ -425,7 +425,7 @@ export class CabinetRenderer {
       this.cabinetGroup,
     );
 
-    // ── 3. BOTTOM PANEL (sits between side panels, at plinth top) ─────────
+    // ── 3. BOTTOM PANEL (sits between side panels, at skirt top) ─────────
     const botGeo = new THREE.BoxGeometry(L - ct * 2, ct, cD);
     this.createPart(
       botGeo,
@@ -437,8 +437,8 @@ export class CabinetRenderer {
       this.cabinetGroup,
     );
 
-    // ── 4. PLINTH FRONT RAIL (toe-kick board, between the side panels) ────
-    // Only rendered if plinth exists. Sits at the very front of the cabinet.
+    // ── 4. SKIRT FRONT RAIL (toe-kick board, between the side panels) ────
+    // Only rendered if skirt exists. Sits at the very front of the cabinet.
     if (plinthH > 0) {
       const pFrontGeo = new THREE.BoxGeometry(L - ct * 2, plinthH, ct);
       this.createPart(
@@ -451,16 +451,16 @@ export class CabinetRenderer {
         this.cabinetGroup,
       );
 
-      // NOTE: Plinth SIDE rails are intentionally omitted here.
-      // The extended side panels already visually enclose the plinth zone.
-      // The physical side plinth rails still appear in the CUT LIST
+      // NOTE: Skirt SIDE rails are intentionally omitted here.
+      // The extended side panels already visually enclose the skirt zone.
+      // The physical side skirt rails still appear in the CUT LIST
       // (generateCutList) as separate parts — this is correct because in
-      // real construction the side panels are one tall board and the plinth
+      // real construction the side panels are one tall board and the skirt
       // rails are glued/screwed behind them for rigidity. The 3D view just
       // shows the clean combined outer face.
     }
 
-    // ── 5. BACK PANEL (plant-on, covers full height including plinth zone) ─
+    // ── 5. BACK PANEL (plant-on, covers full height including skirt zone) ─
     const backGeo = new THREE.BoxGeometry(L, H, bt);
     this.createPart(
       backGeo,
