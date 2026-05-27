@@ -8,7 +8,7 @@
 
 import React, { useState, useMemo, useRef } from "react";
 import { THEMES } from "./data/themes.js";
-import { DEFAULTS } from "./data/constants.js";
+import { DEFAULTS, hexToColorName } from "./data/constants.js";
 import {
   generateCutList,
   generateHardwareSchedule,
@@ -210,7 +210,7 @@ export default function App({
         p.edgeBand,
         p.machining || "",
         p.hardware || "",
-        p.color || "",
+        hexToColorName(p.color),
         p.note,
       ]);
     const csv = [headers, ...rows]

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { PANEL_COLOR_PALETTE } from "../data/constants.js";
 
 /**
  * PanelColorPicker
@@ -7,23 +8,7 @@ import React, { useState, useRef, useEffect } from "react";
  * Shows a curated palette of wood/laminate colors, a custom hex input, and a reset button.
  */
 
-const PALETTE = [
-  { name: "White",       hex: "#FFFFFF" },
-  { name: "Ivory",       hex: "#F5F5F0" },
-  { name: "Natural Oak", hex: "#E8D4B8" },
-  { name: "Honey",       hex: "#D4A76A" },
-  { name: "Golden Oak",  hex: "#8B6914" },
-  { name: "Walnut",      hex: "#8B4513" },
-  { name: "Dark Walnut", hex: "#5C3317" },
-  { name: "Espresso",    hex: "#2F1B0E" },
-  { name: "Anthracite",  hex: "#4A4A4A" },
-  { name: "Navy",        hex: "#1E3A5F" },
-  { name: "Forest",      hex: "#2D4A3E" },
-  { name: "Burgundy",    hex: "#6B2D3E" },
-  { name: "Silver Grey", hex: "#B0B0B0" },
-  { name: "Charcoal",    hex: "#3D3D3D" },
-  { name: "Black",       hex: "#1A1A1A" },
-];
+const PALETTE = PANEL_COLOR_PALETTE;
 
 function isLightColor(hex) {
   const c = hex.replace("#", "");

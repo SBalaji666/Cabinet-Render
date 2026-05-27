@@ -344,3 +344,31 @@ export const MATERIAL_COLORS = {
   "Drawer Side 12mm": "#a37f6b",
   "Drawer Face 18mm": "#a36b7f",
 };
+
+// ─── PANEL COLOR PALETTE ──────────────────────────────────────────────────────
+export const PANEL_COLOR_PALETTE = [
+  { name: "White",       hex: "#FFFFFF" },
+  { name: "Ivory",       hex: "#F5F5F0" },
+  { name: "Natural Oak", hex: "#E8D4B8" },
+  { name: "Honey",       hex: "#D4A76A" },
+  { name: "Golden Oak",  hex: "#8B6914" },
+  { name: "Walnut",      hex: "#8B4513" },
+  { name: "Dark Walnut", hex: "#5C3317" },
+  { name: "Espresso",    hex: "#2F1B0E" },
+  { name: "Anthracite",  hex: "#4A4A4A" },
+  { name: "Navy",        hex: "#1E3A5F" },
+  { name: "Forest",      hex: "#2D4A3E" },
+  { name: "Burgundy",    hex: "#6B2D3E" },
+  { name: "Silver Grey", hex: "#B0B0B0" },
+  { name: "Charcoal",    hex: "#3D3D3D" },
+  { name: "Black",       hex: "#1A1A1A" },
+];
+
+/** Resolve a hex color code to a human-readable name, or "Custom ({hex})" */
+export function hexToColorName(hex) {
+  if (!hex) return "";
+  const match = PANEL_COLOR_PALETTE.find(
+    (p) => p.hex.toUpperCase() === hex.toUpperCase(),
+  );
+  return match ? match.name : `Custom (${hex})`;
+}

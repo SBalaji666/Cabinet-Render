@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { MATERIAL_COLORS } from "../data/constants.js";
+import { MATERIAL_COLORS, hexToColorName } from "../data/constants.js";
 
 export default function CutListTable({ parts, onExportCSV, ui }) {
   const [filter, setFilter] = useState("All");
@@ -217,6 +217,7 @@ export default function CutListTable({ parts, onExportCSV, ui }) {
               {col("Thick", "thickness", 60)}
               {col("Grain", "grain", 70)}
               {col("Edge Band", "edgeBand", 120)}
+              {col("Color", "color", 100)}
               <th
                 style={{
                   padding: "10px 12px",
@@ -350,6 +351,32 @@ export default function CutListTable({ parts, onExportCSV, ui }) {
                   style={{ padding: "8px 12px", color: ui.muted, fontSize: 10 }}
                 >
                   {p.edgeBand}
+                </td>
+                <td
+                  style={{ padding: "8px 12px", fontSize: 10 }}
+                >
+                  {p.color ? (
+                    <div
+                      style={{ display: "flex", alignItems: "center", gap: 6 }}
+                    >
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: 12,
+                          height: 12,
+                          borderRadius: 3,
+                          background: p.color,
+                          border: `1px solid ${ui.border}`,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span style={{ color: ui.text, fontWeight: 600 }}>
+                        {hexToColorName(p.color)}
+                      </span>
+                    </div>
+                  ) : (
+                    <span style={{ color: ui.muted }}>—</span>
+                  )}
                 </td>
                 <td
                   style={{ padding: "8px 12px", color: ui.muted, fontSize: 10 }}
