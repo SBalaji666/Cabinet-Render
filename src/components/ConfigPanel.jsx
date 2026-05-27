@@ -4,7 +4,7 @@ import {
   DRAWER_SLIDES,
   HINGES,
   SHELF_SYSTEMS,
-  PLINTH_SYSTEMS,
+  SKIRT_SYSTEMS,
   DOOR_OVERLAY_TYPES,
   CONSTRUCTION_TYPES,
 } from "../data/constants.js";
@@ -179,11 +179,11 @@ export default function ConfigPanel({
         <div style={headerStyle}>HARDWARE</div>
         {[
           [
-            "Plinth",
-            "plinth",
-            Object.keys(PLINTH_SYSTEMS).map((k) => ({
+            "Skirt",
+            "skirt",
+            Object.keys(SKIRT_SYSTEMS).map((k) => ({
               v: k,
-              l: PLINTH_SYSTEMS[k].name,
+              l: SKIRT_SYSTEMS[k].name,
             })),
           ],
           [

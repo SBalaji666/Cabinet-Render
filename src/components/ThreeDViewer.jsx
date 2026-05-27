@@ -70,6 +70,10 @@ export default function ThreeDViewer({
   useEffect(() => {
     if (rendererRef.current) {
       rendererRef.current.updateConfig(config);
+      // buildCabinet resets all animation state — sync React state
+      setDoorsOpen(false);
+      setDrawersOpen(false);
+      setExploded(false);
     }
   }, [config]);
 
@@ -218,7 +222,7 @@ export default function ThreeDViewer({
             onClick={() => {
               if (rendererRef.current) {
                 rendererRef.current.toggleDoors();
-                setDoorsOpen(!doorsOpen);
+                setDoorsOpen(rendererRef.current.isDoorsOpen);
               }
             }}
             style={{
@@ -244,7 +248,7 @@ export default function ThreeDViewer({
             onClick={() => {
               if (rendererRef.current) {
                 rendererRef.current.toggleDrawers();
-                setDrawersOpen(!drawersOpen);
+                setDrawersOpen(rendererRef.current.isDrawersOpen);
               }
             }}
             style={{

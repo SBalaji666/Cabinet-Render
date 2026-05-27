@@ -267,11 +267,11 @@ export const EDGE_BANDING = {
   },
 };
 
-// ─── PLINTH/TOE-KICK ──────────────────────────────────────────────────────────
-export const PLINTH_SYSTEMS = {
-  none: { id: "none", name: "No Plinth", height: 0 },
-  "std-100": { id: "std-100", name: "100mm Plinth", height: 100, setback: 50 },
-  "std-150": { id: "std-150", name: "150mm Plinth", height: 150, setback: 50 },
+// ─── SKIRT/TOE-KICK ───────────────────────────────────────────────────────────
+export const SKIRT_SYSTEMS = {
+  none: { id: "none", name: "No Skirt", height: 0 },
+  "std-100": { id: "std-100", name: "100mm Skirt", height: 100, setback: 50 },
+  "std-150": { id: "std-150", name: "150mm Skirt", height: 150, setback: 50 },
   "rec-120": {
     id: "rec-120",
     name: "120mm Recessed",
@@ -328,7 +328,7 @@ export const DEFAULTS = {
   drawerSlide: "blum-tandem-550",
   hinge: "blum-clip-top-110",
   shelfSystem: "pin-5mm",
-  plinth: "std-100",
+  skirt: "std-100",
   construction: "assembled",
   doorOverlay: "full",
   edgeBanding: "pvc-2mm",

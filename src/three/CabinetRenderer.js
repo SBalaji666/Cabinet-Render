@@ -310,9 +310,11 @@ export class CabinetRenderer {
     const ct = matThickness.carcass,
       bt = matThickness.back,
       dt = matThickness.door;
-    const plinthH = hardware?.plinth
-      ? parseInt(hardware.plinth.split("-")[1]) || 100
-      : 100;
+    const skirtH = hardware?.skirt
+      ? parseInt((hardware.skirt || hardware.plinth).split("-")[1]) || 100
+      : hardware?.plinth
+        ? parseInt(hardware.plinth.split("-")[1]) || 100
+        : 100;
     const doorOverlay =
       DOOR_OVERLAY_TYPES[hardware?.doorOverlay] || DOOR_OVERLAY_TYPES.full;
 
@@ -326,7 +328,7 @@ export class CabinetRenderer {
 
     this.cabinetGroup.position.set(-L / 2, 0, -D / 2);
 
-    this.buildCarcassStructure(L, H, D, ct, bt, plinthH, carcassDepth);
+    this.buildCarcassStructure(L, H, D, ct, bt, skirtH, carcassDepth);
     this.buildSections(
       sections,
       L,
@@ -335,11 +337,11 @@ export class CabinetRenderer {
       ct,
       bt,
       dt,
-      plinthH,
+      skirtH,
       carcassDepth,
       doorOverlay,
     );
-    this.addDimensionAnnotations(L, H + plinthH, D);
+    this.addDimensionAnnotations(L, H + skirtH, D);
 
     this.setupObjectMetadata();
     this.scene.add(this.cabinetGroup);
@@ -347,7 +349,7 @@ export class CabinetRenderer {
     if (Object.keys(this.panelColorMap).length > 0) {
       this.applyPanelColors(this.panelColorMap);
     }
-    this.centerCamera(L, H + plinthH, D);
+    this.centerCamera(L, H + skirtH, D);
   }
 
   setupObjectMetadata() {
@@ -395,15 +397,15 @@ export class CabinetRenderer {
     return mesh;
   }
 
-  buildCarcassStructure(L, H, D, ct, bt, plinthH, cD) {
+  buildCarcassStructure(L, H, D, ct, bt, skirtH, cD) {
     const mats = this.materials;
     const cZ = bt + cD / 2; // Z-centre of carcass depth
 
-    // ── 1. SIDE PANELS (full height: plinth + box, floor to top) ──────────
-    // Height = plinthH + H - ct  (sits under the top panel, starts from floor)
-    const fullSideH = plinthH + H - ct;
+    // ── 1. SIDE PANELS (full height: skirt + box, floor to top) ──────────
+    // Height = skirtH + H - ct  (sits under the top panel, starts from floor)
+    const fullSideH = skirtH + H - ct;
     const sideGeo = new THREE.BoxGeometry(ct, fullSideH, cD);
-    const sideY = fullSideH / 2; // centred from y=0 up to plinthH+H-ct
+    const sideY = fullSideH / 2; // centred from y=0 up to skirtH+H-ct
 
     // Left side panel
     this.createPart(
@@ -434,57 +436,57 @@ export class CabinetRenderer {
       topGeo,
       mats.carcass,
       L / 2,
-      plinthH + H - ct / 2,
+      skirtH + H - ct / 2,
       cZ,
       0x555555,
       this.cabinetGroup,
       { panelId: "top-panel", panelType: "carcass", panelLabel: "Top Panel" },
     );
 
-    // ── 3. BOTTOM PANEL (sits between side panels, at plinth top) ─────────
+    // ── 3. BOTTOM PANEL (sits between side panels, at skirt top) ─────────
     const botGeo = new THREE.BoxGeometry(L - ct * 2, ct, cD);
     this.createPart(
       botGeo,
       mats.carcass,
       L / 2,
-      plinthH + ct / 2,
+      skirtH + ct / 2,
       cZ,
       0x333333,
       this.cabinetGroup,
       { panelId: "bottom-panel", panelType: "carcass", panelLabel: "Bottom Panel" },
     );
 
-    // ── 4. PLINTH FRONT RAIL (toe-kick board, between the side panels) ────
-    // Only rendered if plinth exists. Sits at the very front of the cabinet.
-    if (plinthH > 0) {
-      const pFrontGeo = new THREE.BoxGeometry(L - ct * 2, plinthH, ct);
+    // ── 4. SKIRT FRONT RAIL (toe-kick board, between the side panels) ────
+    // Only rendered if skirt exists. Sits at the very front of the cabinet.
+    if (skirtH > 0) {
+      const pFrontGeo = new THREE.BoxGeometry(L - ct * 2, skirtH, ct);
       this.createPart(
         pFrontGeo,
         mats.carcass,
         L / 2,
-        plinthH / 2,
+        skirtH / 2,
         bt + cD - ct / 2, // flush with the front face of the carcass
         0x333333,
         this.cabinetGroup,
-        { panelId: "plinth-front", panelType: "carcass", panelLabel: "Plinth Front Rail" },
+        { panelId: "skirt-front", panelType: "carcass", panelLabel: "Skirt Front Rail" },
       );
 
-      // NOTE: Plinth SIDE rails are intentionally omitted here.
-      // The extended side panels already visually enclose the plinth zone.
-      // The physical side plinth rails still appear in the CUT LIST
+      // NOTE: Skirt SIDE rails are intentionally omitted here.
+      // The extended side panels already visually enclose the skirt zone.
+      // The physical side skirt rails still appear in the CUT LIST
       // (generateCutList) as separate parts — this is correct because in
-      // real construction the side panels are one tall board and the plinth
+      // real construction the side panels are one tall board and the skirt
       // rails are glued/screwed behind them for rigidity. The 3D view just
       // shows the clean combined outer face.
     }
 
-    // ── 5. BACK PANEL (plant-on, covers full height including plinth zone) ─
+    // ── 5. BACK PANEL (plant-on, covers full height including skirt zone) ─
     const backGeo = new THREE.BoxGeometry(L, H, bt);
     this.createPart(
       backGeo,
       mats.back,
       L / 2,
-      plinthH + H / 2,
+      skirtH + H / 2,
       bt / 2,
       0x666666,
       this.cabinetGroup,
@@ -492,7 +494,7 @@ export class CabinetRenderer {
     );
   }
 
-  buildSections(sections, L, H, D, ct, bt, dt, plinthH, cD, doorOverlay) {
+  buildSections(sections, L, H, D, ct, bt, dt, skirtH, cD, doorOverlay) {
     // After merging, every section in this array has showDivider === true
     // (except section[0] which never has a left divider).
     // Use the actual visible-divider count for interior-width maths.
@@ -528,7 +530,7 @@ export class CabinetRenderer {
           divGeo,
           this.materials.carcass,
           currentIntX + ct / 2,
-          plinthH + H / 2,
+          skirtH + H / 2,
           bt + cD / 2,
           0x333333,
           sectionGroup,
@@ -555,7 +557,7 @@ export class CabinetRenderer {
           cD,
           ct,
           bt,
-          plinthH,
+          skirtH,
           section,
         );
       } else {
@@ -567,7 +569,7 @@ export class CabinetRenderer {
           ct,
           bt,
           dt,
-          plinthH,
+          skirtH,
           section,
           doorOverlay,
         );
@@ -579,7 +581,7 @@ export class CabinetRenderer {
     });
   }
 
-  buildOpenSection(group, bounds, H, cD, ct, bt, plinthH, section) {
+  buildOpenSection(group, bounds, H, cD, ct, bt, skirtH, section) {
     const { intX, intW } = bounds;
     const shelfCount = section.shelves || 0;
     const internalH = H - ct * 2;
@@ -587,7 +589,7 @@ export class CabinetRenderer {
     if (shelfCount > 0) {
       const shelfSpacing = internalH / (shelfCount + 1);
       for (let i = 0; i < shelfCount; i++) {
-        const shelfY = plinthH + ct + (i + 1) * shelfSpacing;
+        const shelfY = skirtH + ct + (i + 1) * shelfSpacing;
         const shelfGeo = new THREE.BoxGeometry(intW - 2, 18, cD - 10); // 10mm setback
         this.createPart(
           shelfGeo,
@@ -611,7 +613,7 @@ export class CabinetRenderer {
     ct,
     bt,
     dt,
-    plinthH,
+    skirtH,
     section,
     doorOverlay,
   ) {
@@ -638,8 +640,8 @@ export class CabinetRenderer {
     const placement = section.drawers?.placement || "bottom";
     const isInternal = section.drawers?.isInternal || false;
 
-    const floorY = plinthH + ct;
-    const ceilingY = plinthH + H - ct;
+    const floorY = skirtH + ct;
+    const ceilingY = skirtH + H - ct;
 
     let drawerAreaStart = floorY,
       drawerAreaEnd = ceilingY;
@@ -901,8 +903,8 @@ export class CabinetRenderer {
       doorLeaves.forEach((leaf) => buildOneDoor(leaf, startY, endY));
     };
 
-    const cabBottom = doorOverlay.id === "inset" ? floorY : plinthH + 2;
-    const cabTop = doorOverlay.id === "inset" ? ceilingY : plinthH + H - 2;
+    const cabBottom = doorOverlay.id === "inset" ? floorY : skirtH + 2;
+    const cabTop = doorOverlay.id === "inset" ? ceilingY : skirtH + H - 2;
 
     if (drawerCount > 0 && !isInternal) {
       if (placement === "custom") {

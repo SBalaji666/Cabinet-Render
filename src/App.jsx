@@ -71,7 +71,7 @@ export default function App({
       drawerSlide: DEFAULTS.drawerSlide,
       hinge: DEFAULTS.hinge,
       shelfSystem: DEFAULTS.shelfSystem,
-      plinth: DEFAULTS.plinth,
+      skirt: DEFAULTS.skirt,
       construction: DEFAULTS.construction,
       doorOverlay: DEFAULTS.doorOverlay,
       edgeBanding: DEFAULTS.edgeBanding,
