@@ -309,9 +309,9 @@ export const DOOR_OVERLAY_TYPES = {
 
 // ─── DEFAULT VALUES ───────────────────────────────────────────────────────────
 export const DEFAULTS = {
-  overall: { length: 1000, height: 2000, depth: 300, unit: "mm" },
+  overall: { length: 2400, height: 2100, depth: 480, unit: "mm" },
   materials: {
-    carcass: 20,
+    carcass: 18,
     back: 6,
     shelf: 18,
     door: 18,
