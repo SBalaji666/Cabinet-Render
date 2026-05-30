@@ -52,8 +52,8 @@ export function validateConfig(config) {
   const skirt = SKIRT_SYSTEMS[hardware.skirt || hardware.plinth] || SKIRT_SYSTEMS.none;
   const ct = materials.carcass;
 
-  // Box height is exactly the configured height (skirt is extra, not subtracted)
-  const boxHeight = overall.height;
+  // Total height is absolute max. Box height = total - skirt.
+  const boxHeight = overall.height - skirt.height;
 
   if (overall.depth < 200)
     warnings.push("Cabinet depth < 200 mm — too shallow for any drawer slide.");
@@ -172,9 +172,9 @@ export function generateCutList(config) {
   const dividerCount = sections.length - 1; // only real (visible) dividers
 
   // ── HEIGHT & DEPTH CALCULATIONS ──
-  // Skirt is extra. The cabinet box itself is exactly H.
+  // H is the total height (floor to top). Skirt is subtracted to get box height.
   const skirtHeight = skirt.height;
-  const boxHeight = H;
+  const boxHeight = H - skirtHeight;
   const internalHeight = boxHeight - ct * 2;
 
   // Carcass Depth (Overall Depth minus back, door, and a 1mm bumper gap)
@@ -239,19 +239,19 @@ export function generateCutList(config) {
     panelId: "bottom-panel",
   });
 
-  const fullSideHeight = skirtHeight + boxHeight - ct;
+  const fullSideHeight = H - ct;
   ["Left Side Panel", "Right Side Panel"].forEach((side) => {
     add({
       part: side,
       section: "Carcass",
       material: `Carcass ${ct}mm`,
       qty: 1,
-      length: fullSideHeight, // FIX: was `boxHeight - ct`, now includes skirt
+      length: fullSideHeight, // total height minus top panel
       width: carcassDepth,
       thickness: ct,
       grain: "height",
       edgeBand: "front edge",
-      note: `${side} — full height including skirt zone (${skirtHeight} mm skirt + ${boxHeight - ct} mm box). Sits under top panel.`,
+      note: `${side} — full height (${fullSideHeight} mm = ${H} mm total - ${ct} mm top panel). Skirt zone: ${skirtHeight} mm.`,
       machining:
         joinery.id === "dado"
           ? "Dado grooves for dividers & fixed shelves"

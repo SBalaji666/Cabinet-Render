@@ -9,6 +9,7 @@
 import React, { useState, useMemo, useRef } from "react";
 import { THEMES } from "./data/themes.js";
 import { DEFAULTS, hexToColorName } from "./data/constants.js";
+import * as XLSX from "xlsx";
 import {
   generateCutList,
   generateHardwareSchedule,
@@ -170,24 +171,8 @@ export default function App({
   // ── Delete handler ────────────────────────────────────────────────────────
   const handleDelete = () => deleteDesign(currentDesignId);
 
-  // ── Export CSV ────────────────────────────────────────────────────────────
-  const downloadCSV = (filter, searchTerm) => {
-    const headers = [
-      "#",
-      "Part",
-      "Section",
-      "Material",
-      "Qty",
-      "Length(mm)",
-      "Width(mm)",
-      "Thickness(mm)",
-      "Grain",
-      "Edge Band",
-      "Machining",
-      "Hardware",
-      "Color",
-      "Notes",
-    ];
+  // ── Export Excel ────────────────────────────────────────────────────────────
+  const downloadExcel = (filter, searchTerm) => {
     const rows = cutList
       .filter((p) => {
         const matchesFilter = filter === "All" || p.material === filter;
@@ -197,31 +182,48 @@ export default function App({
           p.section?.toLowerCase().includes(searchTerm.toLowerCase());
         return matchesFilter && matchesSearch;
       })
-      .map((p) => [
-        p.id,
-        p.part,
-        p.section,
-        p.material,
-        p.qty,
-        Math.round(p.length),
-        Math.round(p.width),
-        p.thickness,
-        p.grain,
-        p.edgeBand,
-        p.machining || "",
-        p.hardware || "",
-        hexToColorName(p.color),
-        p.note,
-      ]);
-    const csv = [headers, ...rows]
-      .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `cutlist_${overall.length}x${overall.height}x${overall.depth}.csv`;
-    a.click();
+      .map((p) => ({
+        "#": p.id,
+        "Part": p.part,
+        "Section": p.section,
+        "Material": p.material,
+        "Qty": p.qty,
+        "Length (mm)": Math.round(p.length),
+        "Width (mm)": Math.round(p.width),
+        "Thickness (mm)": p.thickness,
+        "Grain": p.grain || "",
+        "Edge Band": p.edgeBand || "",
+        "Machining": p.machining || "",
+        "Hardware": p.hardware || "",
+        "Color": hexToColorName(p.color),
+        "Notes": p.note || "",
+      }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+
+    // Set readable column widths
+    ws["!cols"] = [
+      { wch: 5 },   // #
+      { wch: 28 },  // Part
+      { wch: 10 },  // Section
+      { wch: 22 },  // Material
+      { wch: 5 },   // Qty
+      { wch: 12 },  // Length
+      { wch: 12 },  // Width
+      { wch: 12 },  // Thickness
+      { wch: 8 },   // Grain
+      { wch: 18 },  // Edge Band
+      { wch: 30 },  // Machining
+      { wch: 28 },  // Hardware
+      { wch: 14 },  // Color
+      { wch: 40 },  // Notes
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Cut List");
+    XLSX.writeFile(wb, `cutlist_${overall.length}x${overall.height}x${overall.depth}.xlsx`);
   };
+
 
   const downloadNestingSVG = (material) => {
     const svg = generateNestingSVG(sheetLayout, material);
@@ -705,7 +707,7 @@ export default function App({
             />
           )}
           {mainTab === "cutlist" && (
-            <CutListTable parts={cutList} onExportCSV={downloadCSV} ui={ui} />
+            <CutListTable parts={cutList} onExportExcel={downloadExcel} ui={ui} />
           )}
           {mainTab === "optimization" && (
             <SheetOptimizationView

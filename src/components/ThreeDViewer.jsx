@@ -125,6 +125,11 @@ export default function ThreeDViewer({
 
   const handleScreenshot = () => {
     if (!rendererRef.current) return;
+    // Force render to ensure the latest frame is captured
+    rendererRef.current.renderer.render(
+      rendererRef.current.scene,
+      rendererRef.current.camera,
+    );
     const dataURL =
       rendererRef.current.renderer.domElement.toDataURL("image/png");
     const a = document.createElement("a");
@@ -292,6 +297,26 @@ export default function ThreeDViewer({
           }}
         >
           🖨️ Print View
+        </button>
+
+        <button
+          onClick={handleScreenshot}
+          style={{
+            padding: "6px 12px",
+            borderRadius: 6,
+            fontSize: 10,
+            cursor: "pointer",
+            fontFamily: "inherit",
+            border: `1.5px solid ${ui.border}`,
+            background: ui.inputBg,
+            color: ui.text,
+            fontWeight: 600,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          📷 Save Image
         </button>
 
         <button

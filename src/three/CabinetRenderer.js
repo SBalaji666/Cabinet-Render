@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { DOOR_OVERLAY_TYPES } from "../data/constants.js";
+import { DOOR_OVERLAY_TYPES, SKIRT_SYSTEMS } from "../data/constants.js";
 import {
   computeMergedSections,
   countVisibleDividers,
@@ -310,11 +310,11 @@ export class CabinetRenderer {
     const ct = matThickness.carcass,
       bt = matThickness.back,
       dt = matThickness.door;
-    const skirtH = hardware?.skirt
-      ? parseInt((hardware.skirt || hardware.plinth).split("-")[1]) || 100
-      : hardware?.plinth
-        ? parseInt(hardware.plinth.split("-")[1]) || 100
-        : 100;
+    // Resolve skirt height from the SKIRT_SYSTEMS lookup — "none" → 0
+    const skirtKey = hardware?.skirt || hardware?.plinth || "none";
+    const skirtH = (SKIRT_SYSTEMS[skirtKey] || SKIRT_SYSTEMS.none).height;
+    // H is the TOTAL height (floor to top). The usable carcass box is H - skirtH.
+    const boxH = H - skirtH;
     const doorOverlay =
       DOOR_OVERLAY_TYPES[hardware?.doorOverlay] || DOOR_OVERLAY_TYPES.full;
 
@@ -328,11 +328,12 @@ export class CabinetRenderer {
 
     this.cabinetGroup.position.set(-L / 2, 0, -D / 2);
 
-    this.buildCarcassStructure(L, H, D, ct, bt, skirtH, carcassDepth);
+    this.buildCarcassStructure(L, H, boxH, D, ct, bt, skirtH, carcassDepth);
     this.buildSections(
       sections,
       L,
       H,
+      boxH,
       D,
       ct,
       bt,
@@ -341,7 +342,7 @@ export class CabinetRenderer {
       carcassDepth,
       doorOverlay,
     );
-    this.addDimensionAnnotations(L, H + skirtH, D);
+    this.addDimensionAnnotations(L, H, D);
 
     this.setupObjectMetadata();
     this.scene.add(this.cabinetGroup);
@@ -349,7 +350,7 @@ export class CabinetRenderer {
     if (Object.keys(this.panelColorMap).length > 0) {
       this.applyPanelColors(this.panelColorMap);
     }
-    this.centerCamera(L, H + skirtH, D);
+    this.centerCamera(L, H, D);
   }
 
   setupObjectMetadata() {
@@ -397,15 +398,15 @@ export class CabinetRenderer {
     return mesh;
   }
 
-  buildCarcassStructure(L, H, D, ct, bt, skirtH, cD) {
+  buildCarcassStructure(L, H, boxH, D, ct, bt, skirtH, cD) {
     const mats = this.materials;
     const cZ = bt + cD / 2; // Z-centre of carcass depth
 
-    // ── 1. SIDE PANELS (full height: skirt + box, floor to top) ──────────
-    // Height = skirtH + H - ct  (sits under the top panel, starts from floor)
-    const fullSideH = skirtH + H - ct;
+    // ── 1. SIDE PANELS (full height: floor to top, minus top-panel cap) ──
+    // H is total height. Side panels run from y=0 to y=H-ct.
+    const fullSideH = H - ct;
     const sideGeo = new THREE.BoxGeometry(ct, fullSideH, cD);
-    const sideY = fullSideH / 2; // centred from y=0 up to skirtH+H-ct
+    const sideY = fullSideH / 2; // centred from y=0 up to H-ct
 
     // Left side panel
     this.createPart(
@@ -430,13 +431,13 @@ export class CabinetRenderer {
       { panelId: "right-side", panelType: "carcass", panelLabel: "Right Side Panel" },
     );
 
-    // ── 2. TOP PANEL (full width, caps both side panels) ──────────────────
+    // ── 2. TOP PANEL (full width, caps both side panels at total height) ──
     const topGeo = new THREE.BoxGeometry(L, ct, cD);
     this.createPart(
       topGeo,
       mats.carcass,
       L / 2,
-      skirtH + H - ct / 2,
+      H - ct / 2,
       cZ,
       0x555555,
       this.cabinetGroup,
@@ -480,13 +481,13 @@ export class CabinetRenderer {
       // shows the clean combined outer face.
     }
 
-    // ── 5. BACK PANEL (plant-on, covers full height including skirt zone) ─
-    const backGeo = new THREE.BoxGeometry(L, H, bt);
+    // ── 5. BACK PANEL (plant-on, covers box height only, above skirt) ─────
+    const backGeo = new THREE.BoxGeometry(L, boxH, bt);
     this.createPart(
       backGeo,
       mats.back,
       L / 2,
-      skirtH + H / 2,
+      skirtH + boxH / 2,
       bt / 2,
       0x666666,
       this.cabinetGroup,
@@ -494,7 +495,7 @@ export class CabinetRenderer {
     );
   }
 
-  buildSections(sections, L, H, D, ct, bt, dt, skirtH, cD, doorOverlay) {
+  buildSections(sections, L, H, boxH, D, ct, bt, dt, skirtH, cD, doorOverlay) {
     // After merging, every section in this array has showDivider === true
     // (except section[0] which never has a left divider).
     // Use the actual visible-divider count for interior-width maths.
@@ -525,12 +526,12 @@ export class CabinetRenderer {
 
       if (idx > 0) {
         // Every divider at this level is a real physical wall
-        const divGeo = new THREE.BoxGeometry(ct, H - ct * 2, cD);
+        const divGeo = new THREE.BoxGeometry(ct, boxH - ct * 2, cD);
         this.createPart(
           divGeo,
           this.materials.carcass,
           currentIntX + ct / 2,
-          skirtH + H / 2,
+          skirtH + boxH / 2,
           bt + cD / 2,
           0x333333,
           sectionGroup,
@@ -553,7 +554,7 @@ export class CabinetRenderer {
         this.buildOpenSection(
           sectionGroup,
           bounds,
-          H,
+          boxH,
           cD,
           ct,
           bt,
@@ -564,7 +565,7 @@ export class CabinetRenderer {
         this.buildClosedSection(
           sectionGroup,
           bounds,
-          H,
+          boxH,
           cD,
           ct,
           bt,
@@ -581,10 +582,10 @@ export class CabinetRenderer {
     });
   }
 
-  buildOpenSection(group, bounds, H, cD, ct, bt, skirtH, section) {
+  buildOpenSection(group, bounds, boxH, cD, ct, bt, skirtH, section) {
     const { intX, intW } = bounds;
     const shelfCount = section.shelves || 0;
-    const internalH = H - ct * 2;
+    const internalH = boxH - ct * 2;
 
     if (shelfCount > 0) {
       const shelfSpacing = internalH / (shelfCount + 1);
@@ -608,7 +609,7 @@ export class CabinetRenderer {
   buildClosedSection(
     group,
     bounds,
-    H,
+    boxH,
     cD,
     ct,
     bt,
@@ -641,7 +642,7 @@ export class CabinetRenderer {
     const isInternal = section.drawers?.isInternal || false;
 
     const floorY = skirtH + ct;
-    const ceilingY = skirtH + H - ct;
+    const ceilingY = skirtH + boxH - ct;
 
     let drawerAreaStart = floorY,
       drawerAreaEnd = ceilingY;
@@ -904,7 +905,7 @@ export class CabinetRenderer {
     };
 
     const cabBottom = doorOverlay.id === "inset" ? floorY : skirtH + 2;
-    const cabTop = doorOverlay.id === "inset" ? ceilingY : skirtH + H - 2;
+    const cabTop = doorOverlay.id === "inset" ? ceilingY : skirtH + boxH - 2;
 
     if (drawerCount > 0 && !isInternal) {
       if (placement === "custom") {

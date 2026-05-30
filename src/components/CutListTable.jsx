@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { MATERIAL_COLORS, hexToColorName } from "../data/constants.js";
 
-export default function CutListTable({ parts, onExportCSV, ui }) {
+export default function CutListTable({ parts, onExportExcel, ui }) {
   const [filter, setFilter] = useState("All");
   const [sortBy, setSortBy] = useState("id");
   const [sortDir, setSortDir] = useState(1);
@@ -152,7 +152,7 @@ export default function CutListTable({ parts, onExportCSV, ui }) {
 
         {/* Export button */}
         <button
-          onClick={() => onExportCSV(filter, searchTerm)}
+          onClick={() => onExportExcel(filter, searchTerm)}
           style={{
             padding: "6px 14px",
             borderRadius: 6,
@@ -177,7 +177,7 @@ export default function CutListTable({ parts, onExportCSV, ui }) {
               strokeLinejoin="round"
             />
           </svg>
-          Export CSV
+          Export Excel
         </button>
       </div>
 
