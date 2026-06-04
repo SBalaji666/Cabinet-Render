@@ -8,7 +8,7 @@
 
 import React, { useState, useMemo, useRef } from "react";
 import { THEMES } from "./data/themes.js";
-import { DEFAULTS, hexToColorName } from "./data/constants.js";
+import { DEFAULTS, hexToColorName, getDefaultSheetMaterials } from "./data/constants.js";
 import * as XLSX from "xlsx";
 import {
   generateCutList,
@@ -88,6 +88,9 @@ export default function App({
   const [panelColors, setPanelColors] = useState(
     preloadedConfig?.panelColors ?? {},
   );
+  const [sheetMaterials, setSheetMaterials] = useState(
+    preloadedConfig?.sheetMaterials ?? getDefaultSheetMaterials(),
+  );
 
   // ── Save modal state ──────────────────────────────────────────────────────
   const [saveModalOpen, setSaveModalOpen] = useState(false);
@@ -117,8 +120,8 @@ export default function App({
     [cutList, config],
   );
   const sheetLayout = useMemo(
-    () => optimizeSheetLayout(cutList, tolerances.sawKerf),
-    [cutList, tolerances.sawKerf],
+    () => optimizeSheetLayout(cutList, tolerances.sawKerf, sheetMaterials),
+    [cutList, tolerances.sawKerf, sheetMaterials],
   );
   const materialCost = useMemo(
     () => calculateMaterialCost(sheetLayout),
@@ -156,6 +159,7 @@ export default function App({
       hardware,
       sections,
       panelColors,
+      sheetMaterials,
       themeKey,
     });
 
@@ -715,6 +719,16 @@ export default function App({
               materialCost={materialCost}
               onDownloadNesting={downloadNestingSVG}
               ui={ui}
+              sheetMaterials={sheetMaterials}
+              onUpdateSheetMaterial={(name, patch) =>
+                setSheetMaterials((prev) => ({
+                  ...prev,
+                  [name]: { ...prev[name], ...patch },
+                }))
+              }
+              onResetSheetMaterials={() =>
+                setSheetMaterials(getDefaultSheetMaterials())
+              }
             />
           )}
           {mainTab === "hardware" && (

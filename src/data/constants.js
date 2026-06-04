@@ -245,6 +245,11 @@ export const SHEET_MATERIALS = {
   },
 };
 
+/** Return a fresh deep-clone of SHEET_MATERIALS for use as mutable state. */
+export function getDefaultSheetMaterials() {
+  return JSON.parse(JSON.stringify(SHEET_MATERIALS));
+}
+
 // ─── EDGE BANDING ─────────────────────────────────────────────────────────────
 export const EDGE_BANDING = {
   "pvc-1mm": {

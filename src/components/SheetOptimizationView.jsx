@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { MATERIAL_COLORS } from '../data/constants.js';
+import SheetMaterialEditor from './SheetMaterialEditor.jsx';
 
-export default function SheetOptimizationView({ sheetLayout, materialCost, onDownloadNesting, ui }) {
+export default function SheetOptimizationView({ sheetLayout, materialCost, onDownloadNesting, ui, sheetMaterials, onUpdateSheetMaterial, onResetSheetMaterials }) {
   const [selectedMaterial, setSelectedMaterial] = useState(null);
 
   const materials = Object.keys(sheetLayout);
@@ -27,6 +28,16 @@ export default function SheetOptimizationView({ sheetLayout, materialCost, onDow
           </div>
         </div>
       </div>
+
+      {/* Sheet dimensions editor */}
+      {sheetMaterials && (
+        <SheetMaterialEditor
+          sheetMaterials={sheetMaterials}
+          onUpdate={onUpdateSheetMaterial}
+          onReset={onResetSheetMaterials}
+          ui={ui}
+        />
+      )}
 
       {/* Material selector */}
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

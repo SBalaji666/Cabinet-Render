@@ -145,7 +145,8 @@ class Sheet {
 /**
  * Optimize part placement across multiple sheets
  */
-export function optimizeSheetLayout(parts, sawKerf = 3) {
+export function optimizeSheetLayout(parts, sawKerf = 3, sheetMaterials = null) {
+  const sheets_lookup = sheetMaterials || SHEET_MATERIALS;
   // Group parts by material
   const partsByMaterial = {};
   parts.forEach((part) => {
@@ -166,7 +167,7 @@ export function optimizeSheetLayout(parts, sawKerf = 3) {
   const results = {};
 
   Object.entries(partsByMaterial).forEach(([material, materialParts]) => {
-    const sheetSpec = SHEET_MATERIALS[material];
+    const sheetSpec = sheets_lookup[material];
     if (!sheetSpec) {
       console.warn(`No sheet specification found for material: ${material}`);
       return;
