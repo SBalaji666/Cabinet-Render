@@ -51,6 +51,7 @@ export default function App({
 }) {
   const navigate = useNavigate();
   const nextSectionId = useRef(8);
+  const fileInputRef = useRef(null);
 
   // ── Design sync hook ──────────────────────────────────────────────────────
   const { saveDesign, deleteDesign, isPending, saveError, setSaveError } =
@@ -237,6 +238,60 @@ export default function App({
     a.href = URL.createObjectURL(blob);
     a.download = `nesting_${material.replace(/\s+/g, "_")}.svg`;
     a.click();
+  };
+
+  // ── Export / Import JSON ───────────────────────────────────────────────────
+  const exportConfigJSON = () => {
+    const configData = {
+      _exportedAt: new Date().toISOString(),
+      _version: 1,
+      overall,
+      materials,
+      tolerances,
+      hardware,
+      sections,
+      panelColors,
+      sheetMaterials,
+      themeKey,
+    };
+    const json = JSON.stringify(configData, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `cabinet-config_${overall.length}x${overall.height}x${overall.depth}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const importConfigJSON = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+
+        // Hydrate every state slice that exists in the file
+        if (data.overall) setOverall(data.overall);
+        if (data.materials) setMaterials(data.materials);
+        if (data.tolerances) setTolerances(data.tolerances);
+        if (data.hardware) setHardware(data.hardware);
+        if (data.sections) {
+          setSections(data.sections);
+          // Keep section ID counter above the highest imported id
+          const maxId = Math.max(...data.sections.map((s) => s.id), 0);
+          nextSectionId.current = maxId + 1;
+        }
+        if (data.panelColors) setPanelColors(data.panelColors);
+        if (data.sheetMaterials) setSheetMaterials(data.sheetMaterials);
+        if (data.themeKey && THEMES[data.themeKey]) setThemeKey(data.themeKey);
+      } catch (err) {
+        alert("Invalid JSON file — could not parse the configuration.\n\n" + err.message);
+      }
+    };
+    reader.onerror = () => alert("Failed to read the file. Please try again.");
+    reader.readAsText(file);
+    // Reset input so the same file can be re-imported
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   // ── Section management ────────────────────────────────────────────────────
@@ -507,6 +562,44 @@ export default function App({
           {!currentDesignId && (
             <LoadDesignDropdown designs={savedDesigns} ui={ui} />
           )}
+
+          {/* Export / Import JSON */}
+          <button
+            id="export-json-btn"
+            onClick={exportConfigJSON}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 8,
+              fontFamily: FONT,
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+              background: "transparent",
+              color: ui.accent,
+              border: `1.5px solid ${ui.accent}`,
+              transition: "all 0.15s",
+            }}
+          >
+            ↓ Export JSON
+          </button>
+          <button
+            id="import-json-btn"
+            onClick={() => fileInputRef.current?.click()}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 8,
+              fontFamily: FONT,
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+              background: "transparent",
+              color: ui.accent,
+              border: `1.5px solid ${ui.accent}`,
+              transition: "all 0.15s",
+            }}
+          >
+            ↑ Import JSON
+          </button>
 
           {/* Tab buttons */}
           {/* {tabBtn(
@@ -798,6 +891,15 @@ export default function App({
           }}
         />
       )}
+
+      {/* Hidden file input for JSON import */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json"
+        style={{ display: "none" }}
+        onChange={(e) => importConfigJSON(e.target.files?.[0])}
+      />
     </div>
   );
 }
