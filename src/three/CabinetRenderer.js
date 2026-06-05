@@ -1300,6 +1300,69 @@ export class CabinetRenderer {
     this.controls.update();
   }
 
+  /**
+   * Set opacity for all meshes of a given panelType ('door', 'back', etc.).
+   * opacity: 0–1. At 0 the mesh is hidden entirely.
+   */
+  setPanelTypeOpacity(panelType, opacity) {
+    if (!this.cabinetGroup) return;
+
+    this.cabinetGroup.traverse((obj) => {
+      if (!obj.isMesh) return;
+
+      // Match by panelType tag set during createPart / buildOneDoor
+      const type = obj.userData.panelType;
+      if (type !== panelType) return;
+
+      // Clone material on first opacity change so panels stay independent
+      if (!obj.userData._hasOpacityClone) {
+        obj.material = obj.material.clone();
+        obj.userData._hasOpacityClone = true;
+        obj.userData.originalMaterial = obj.material;
+      }
+
+      obj.material.transparent = true;
+      obj.material.opacity = opacity;
+      obj.material.depthWrite = opacity > 0.95;   // avoid z-fighting when transparent
+      obj.visible = opacity > 0;                   // fully hide at 0
+
+      // Also hide/show any matching edge lines (sibling with same position)
+      if (obj.parent) {
+        obj.parent.children.forEach((sibling) => {
+          if (sibling.isLineSegments && sibling.position.equals(obj.position)) {
+            sibling.visible = opacity > 0;
+          }
+        });
+      }
+    });
+
+    // Special handling for door hinges (door meshes live inside hinge groups)
+    if (panelType === "door") {
+      this.doorHinges.forEach((hinge) => {
+        hinge.traverse((child) => {
+          if (child.isMesh && child.userData.panelType === "door") {
+            if (!child.userData._hasOpacityClone) {
+              child.material = child.material.clone();
+              child.userData._hasOpacityClone = true;
+              child.userData.originalMaterial = child.material;
+            }
+            child.material.transparent = true;
+            child.material.opacity = opacity;
+            child.material.depthWrite = opacity > 0.95;
+            child.visible = opacity > 0;
+          }
+          if (child.isLineSegments) {
+            child.visible = opacity > 0;
+          }
+          // Also hide handles when doors are fully hidden
+          if (child.isMesh && !child.userData.panelType && child.material === this.materials.handle) {
+            child.visible = opacity > 0;
+          }
+        });
+      });
+    }
+  }
+
   updateConfig(newConfig) {
     this.config = newConfig;
     this.buildCabinet();

@@ -19,6 +19,8 @@ export default function ThreeDViewer({
   const [exploded, setExploded] = useState(false);
   const [doorsOpen, setDoorsOpen] = useState(false);
   const [drawersOpen, setDrawersOpen] = useState(false);
+  const [doorOpacity, setDoorOpacity] = useState(0.75);
+  const [backOpacity, setBackOpacity] = useState(1.0);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -43,10 +45,7 @@ export default function ThreeDViewer({
         onPanelSelect(event.detail);
       }
     };
-    containerRef.current.addEventListener(
-      "panelselected",
-      handlePanelSelect,
-    );
+    containerRef.current.addEventListener("panelselected", handlePanelSelect);
 
     return () => {
       if (containerRef.current) {
@@ -74,6 +73,9 @@ export default function ThreeDViewer({
       setDoorsOpen(false);
       setDrawersOpen(false);
       setExploded(false);
+      // Re-apply opacity after rebuild since materials are recreated
+      rendererRef.current.setPanelTypeOpacity("door", doorOpacity);
+      rendererRef.current.setPanelTypeOpacity("back", backOpacity);
     }
   }, [config]);
 
@@ -90,6 +92,19 @@ export default function ThreeDViewer({
       rendererRef.current.applyPanelColors(panelColors);
     }
   }, [panelColors]);
+
+  // Apply door / back opacity
+  useEffect(() => {
+    if (rendererRef.current) {
+      rendererRef.current.setPanelTypeOpacity("door", doorOpacity);
+    }
+  }, [doorOpacity]);
+
+  useEffect(() => {
+    if (rendererRef.current) {
+      rendererRef.current.setPanelTypeOpacity("back", backOpacity);
+    }
+  }, [backOpacity]);
 
   const handleViewChange = (mode) => {
     setViewMode(mode);
@@ -338,6 +353,95 @@ export default function ThreeDViewer({
         >
           💥 {exploded ? "Assembled" : "Exploded"}
         </button>
+
+        <div style={{ height: 1, background: ui.border, margin: "4px 0" }} />
+
+        {/* Opacity controls */}
+        <div
+          style={{
+            fontSize: 9,
+            color: ui.muted,
+            fontWeight: 600,
+            marginBottom: 2,
+            letterSpacing: 0.5,
+          }}
+        >
+          VISIBILITY
+        </div>
+        <label
+          style={{
+            fontSize: 9,
+            color: ui.muted,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          🚪 Doors
+          <input
+            id="door-opacity-slider"
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={doorOpacity}
+            onChange={(e) => setDoorOpacity(Number(e.target.value))}
+            style={{
+              flex: 1,
+              accentColor: ui.accent,
+              cursor: "pointer",
+              height: 4,
+            }}
+          />
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 600,
+              color: ui.text,
+              minWidth: 28,
+              textAlign: "right",
+            }}
+          >
+            {Math.round(doorOpacity * 100)}%
+          </span>
+        </label>
+        <label
+          style={{
+            fontSize: 9,
+            color: ui.muted,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          📦 Back
+          <input
+            id="back-opacity-slider"
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={backOpacity}
+            onChange={(e) => setBackOpacity(Number(e.target.value))}
+            style={{
+              flex: 1,
+              accentColor: ui.accent,
+              cursor: "pointer",
+              height: 4,
+            }}
+          />
+          <span
+            style={{
+              fontSize: 9,
+              fontWeight: 600,
+              color: ui.text,
+              minWidth: 28,
+              textAlign: "right",
+            }}
+          >
+            {Math.round(backOpacity * 100)}%
+          </span>
+        </label>
       </div>
 
       {/* Keyboard Shortcuts Info */}
