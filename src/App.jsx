@@ -10,6 +10,8 @@ import React, { useState, useMemo, useRef } from "react";
 import { THEMES } from "./data/themes.js";
 import { DEFAULTS, hexToColorName, getDefaultSheetMaterials } from "./data/constants.js";
 import * as XLSX from "xlsx";
+import { jsPDF } from "jspdf";
+import "svg2pdf.js";
 import {
   generateCutList,
   generateHardwareSchedule,
@@ -238,6 +240,49 @@ export default function App({
     a.href = URL.createObjectURL(blob);
     a.download = `nesting_${material.replace(/\s+/g, "_")}.svg`;
     a.click();
+  };
+
+  /* Convert a material's nesting SVG to an A4 fit-to-page vector PDF, client-side.
+     Mirrors downloadNestingSVG: reuses generateNestingSVG as the source (D-04),
+     same no-op guard, same Blob-download pattern (with revokeObjectURL). The SVG
+     is parsed into a DOM node and rendered to jsPDF via svg2pdf.js (vector, D-03). */
+  const downloadNestingPDF = async (material) => {
+    const svg = generateNestingSVG(sheetLayout, material);
+    if (!svg) return;
+    try {
+      // Parse the standalone SVG string into a real DOM node for svg2pdf.
+      const svgNode = new DOMParser().parseFromString(
+        svg,
+        "image/svg+xml"
+      ).documentElement;
+      const svgWidth = parseFloat(svgNode.getAttribute("width"));
+      const svgHeight = parseFloat(svgNode.getAttribute("height"));
+
+      // Auto orientation from the diagram aspect ratio (D-02).
+      const orientation = svgWidth > svgHeight ? "landscape" : "portrait";
+      const doc = new jsPDF({ unit: "pt", format: "a4", orientation });
+
+      // Fit-to-page: single uniform scale, centered on the A4 printable area (D-01).
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const scale = Math.min(pageWidth / svgWidth, pageHeight / svgHeight);
+      const drawWidth = svgWidth * scale;
+      const drawHeight = svgHeight * scale;
+      const x = (pageWidth - drawWidth) / 2;
+      const y = (pageHeight - drawHeight) / 2;
+
+      // svg2pdf.js augments doc.svg(...) onto the jsPDF prototype; it is async.
+      await doc.svg(svgNode, { x, y, width: drawWidth, height: drawHeight });
+
+      const blob = doc.output("blob");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `nesting_${material.replace(/\s+/g, "_")}.pdf`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (err) {
+      console.error("Nesting PDF export failed", err);
+    }
   };
 
   // ── Export / Import JSON ───────────────────────────────────────────────────
@@ -811,6 +856,7 @@ export default function App({
               sheetLayout={sheetLayout}
               materialCost={materialCost}
               onDownloadNesting={downloadNestingSVG}
+              onDownloadNestingPDF={downloadNestingPDF}
               ui={ui}
               sheetMaterials={sheetMaterials}
               onUpdateSheetMaterial={(name, patch) =>
