@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { MATERIAL_COLORS } from '../data/constants.js';
 import SheetMaterialEditor from './SheetMaterialEditor.jsx';
 
-export default function SheetOptimizationView({ sheetLayout, materialCost, onDownloadNesting, ui, sheetMaterials, onUpdateSheetMaterial, onResetSheetMaterials }) {
+export default function SheetOptimizationView({ sheetLayout, materialCost, onDownloadNesting, onDownloadNestingPDF, ui, sheetMaterials, onUpdateSheetMaterial, onResetSheetMaterials }) {
   const [selectedMaterial, setSelectedMaterial] = useState(null);
 
   const materials = Object.keys(sheetLayout);
@@ -156,22 +156,40 @@ export default function SheetOptimizationView({ sheetLayout, materialCost, onDow
                     £{item.cost}
                   </td>
                   <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                    <button
-                      onClick={() => onDownloadNesting(item.material)}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: 5,
-                        fontSize: 10,
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                        border: `1px solid ${ui.border}`,
-                        background: ui.inputBg,
-                        color: ui.text,
-                        fontWeight: 600,
-                      }}
-                    >
-                      SVG
-                    </button>
+                    <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                      <button
+                        onClick={() => onDownloadNesting(item.material)}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: 5,
+                          fontSize: 10,
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                          border: `1px solid ${ui.border}`,
+                          background: ui.inputBg,
+                          color: ui.text,
+                          fontWeight: 600,
+                        }}
+                      >
+                        SVG
+                      </button>
+                      <button
+                        onClick={() => onDownloadNestingPDF(item.material)}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: 5,
+                          fontSize: 10,
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                          border: `1px solid ${ui.border}`,
+                          background: ui.inputBg,
+                          color: ui.text,
+                          fontWeight: 600,
+                        }}
+                      >
+                        PDF
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
