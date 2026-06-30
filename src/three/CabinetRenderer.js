@@ -718,7 +718,8 @@ export class CabinetRenderer {
         };
 
         const boxWidth = intW - 50;
-        const boxHeight = drawerHeight - 15;
+        // Match cutListEngine: drawer box side height = drawerHeight - 10mm.
+        const boxHeight = drawerHeight - 10;
         const sideT = 12;
 
         this.createPart(

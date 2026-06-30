@@ -143,6 +143,32 @@ class Sheet {
 }
 
 /**
+ * Strip the trailing thickness token (e.g. "Back Panel 9mm" -> "Back Panel")
+ * so materials can be matched by their base category.
+ */
+function baseMaterialName(material) {
+  return material.replace(/\s*\d+(?:\.\d+)?\s*mm\s*$/i, "").trim();
+}
+
+/**
+ * Resolve the catalog sheet spec for a cut-list material string.
+ *
+ * Cut-list material keys embed the *configured* part thickness (e.g.
+ * "Back Panel 6mm"), but the catalog is keyed by its own *stock* thickness
+ * (e.g. "Back Panel 9mm"). Prefer an exact match, then fall back to the entry
+ * whose base category matches — so changing a thickness (or the default
+ * back-panel mismatch) never silently drops parts from the layout.
+ */
+function resolveSheetSpec(material, lookup) {
+  if (lookup[material]) return lookup[material];
+  const base = baseMaterialName(material);
+  const matchKey = Object.keys(lookup).find(
+    (k) => baseMaterialName(k) === base,
+  );
+  return matchKey ? lookup[matchKey] : null;
+}
+
+/**
  * Optimize part placement across multiple sheets
  */
 export function optimizeSheetLayout(parts, sawKerf = 3, sheetMaterials = null) {
@@ -167,7 +193,7 @@ export function optimizeSheetLayout(parts, sawKerf = 3, sheetMaterials = null) {
   const results = {};
 
   Object.entries(partsByMaterial).forEach(([material, materialParts]) => {
-    const sheetSpec = sheets_lookup[material];
+    const sheetSpec = resolveSheetSpec(material, sheets_lookup);
     if (!sheetSpec) {
       console.warn(`No sheet specification found for material: ${material}`);
       return;

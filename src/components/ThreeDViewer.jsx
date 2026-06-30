@@ -497,7 +497,7 @@ export default function ThreeDViewer({
       )}
 
       {/* Panel Color Picker Overlay */}
-      {selectedPanel && (
+      {/* {selectedPanel && (
         <PanelColorPicker
           panelInfo={selectedPanel}
           currentColor={panelColors?.[selectedPanel.panelId] || null}
@@ -506,7 +506,7 @@ export default function ThreeDViewer({
           onClose={() => onPanelSelect(null)}
           ui={ui}
         />
-      )}
+      )} */}
     </div>
   );
 }
